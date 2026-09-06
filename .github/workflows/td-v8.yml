@@ -1,0 +1,93 @@
+name: Upgrade TD tracks and balloon layers
+on:
+  push:
+    paths:
+      - '.github/workflows/td-v8.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch tower defense mode
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tdlearn.html')
+          s=p.read_text()
+
+          old="""<div class=\"actions\"><button id=\"upbtn\" disabled>Upgrades</button><button id=\"rush\">Rush wave</button></div>"""
+          new="""<div class=\"actions\" style=\"grid-template-columns:1fr\"><button id=\"upbtn\" disabled>Upgrades & targeting</button></div>"""
+          assert old in s
+          s=s.replace(old,new)
+          s=s.replace('Camo balloons are invisible to defenders without detection. Armored balloons reduce damage. Fast types move much faster. Later waves split across multiple entrances at once.','Camo balloons require a detection upgrade. Ceramic shells require a ceramic-breaking upgrade before a defender can damage them. Fast and armored layers behave differently, popped layers release smaller balloons, and rush waves happen automatically as part of the cycle.')
+
+          a=s.index("const MAPS=")
+          b=s.index(";const T=",a)
+          maps="""const MAPS={meadow:{short:'Meadow',lives:25,coins:520,hp:1,speed:1,extra:0,g:'#96d777',g2:'#82c866',road:'#d9bd82',edge:'#a88454',info:'Two winding entrances cross near the middle. Early waves rotate entrances; later waves use both.',lanes:[[[0,105],[105,105],[185,165],[150,255],[245,315],[355,275],[430,185],[520,205],[605,300],[690,265],[760,175],[900,175]],[[0,470],[105,470],[190,410],[165,335],[250,285],[350,315],[445,390],[535,350],[610,255],[700,300],[790,405],[900,405]]]},river:{short:'Rivers',lives:20,coins:470,hp:1.18,speed:1.08,extra:2,g:'#76c985',g2:'#62b56f',road:'#d6b377',edge:'#9b7948',info:'Three long winding lanes weave through shared crossings. Different waves favor different entrances.',lanes:[[[0,95],[110,95],[190,155],[170,245],[260,300],[360,255],[455,165],[545,210],[625,315],[725,285],[790,185],[900,185]],[[0,490],[120,490],[205,430],[175,350],[270,295],[375,335],[470,425],[565,370],[635,275],[725,325],[805,410],[900,410]],[[900,85],[805,85],[735,145],[755,230],[670,300],[565,265],[475,185],[385,225],[300,330],[195,300],[115,235],[0,235]]]},night:{short:'Night',lives:15,coins:420,hp:1.4,speed:1.15,extra:4,g:'#405466',g2:'#34495b',road:'#9a826b',edge:'#675341',info:'Four intertwined entrances. All four appear across the early cycle and converge into dangerous late-wave crossings.',lanes:[[[0,80],[95,80],[175,145],[150,230],[240,300],[345,250],[430,155],[530,205],[620,315],[720,275],[795,165],[900,165]],[[0,520],[105,520],[190,455],[165,370],[255,305],[365,350],[455,445],[560,385],[640,285],[735,335],[810,430],[900,430]],[[900,75],[805,75],[730,145],[755,235],[665,305],[555,260],[465,165],[365,220],[285,330],[180,290],[100,225],[0,225]],[[900,530],[800,530],[720,465],[745,375],[650,310],[545,355],[455,455],[350,395],[270,300],[170,345],[95,430],[0,430]] ]}}"""
+          s=s[:a]+maps+s[b:]
+
+          # Replace upgrade trees with explicit camo + ceramic gates for every defender.
+          a=s.index("const U=")
+          b=s.index(";const B=",a)
+          upgrades="""const U={dart:[['sharp','Sharper Tips',8,85,'+35% damage',t=>t.damage*=1.35],['scope','Long Sight',18,120,'+30 range',t=>t.range+=30],['camo','Camo Goggles',26,150,'Detect camo balloons',t=>t.camo=1],['ceramic','Hardened Points',34,205,'Can damage ceramic shells',t=>t.ceramicHit=1],['double','Double Toss',44,245,'28% faster',t=>t.rate*=.72],['elite','Elite Hunter',68,430,'+70% damage',t=>t.damage*=1.7]],rapid:[['coil','Hotter Coil',8,100,'+30% damage',t=>t.damage*=1.3],['focus','Focused Arc',18,135,'+26 range',t=>t.range+=26],['camo','Phase Lens',27,170,'Detect camo balloons',t=>t.camo=1],['ceramic','Fracture Frequency',36,220,'Can damage ceramic shells',t=>t.ceramicHit=1],['chain','Chain Arc',46,270,'Chain 2 targets',t=>t.chain=2],['storm','Storm Core',70,450,'40% faster +50% damage',t=>{t.rate*=.6;t.damage*=1.5}]],splash:[['blast','Bigger Blast',8,120,'+26 splash',t=>t.splash+=26],['spot','Spotter Fuse',19,145,'Detect camo balloons',t=>t.camo=1],['powder','Dense Charge',27,180,'+45% damage',t=>t.damage*=1.45],['ceramic','Shatter Charge',36,230,'Can crack ceramic shells',t=>t.ceramicHit=1],['armor','Armor Breaker',46,255,'Ignore armor reduction',t=>t.armorBreak=1],['siege','Siege Payload',70,500,'+80% damage',t=>t.damage*=1.8]]}"""
+          s=s[:a]+upgrades+s[b:]
+
+          marker=";const SK='esperantoTDLearnScoresV4'"
+          child=""";const CHILD={blue:[['red',1]],green:[['blue',1]],yellow:[['green',1]],pink:[['yellow',1]],black:[['pink',2]],white:[['pink',2]],camo:[['red',1]],camoPink:[['yellow',1]],lead:[['black',2]],armored:[['lead',2]],rainbow:[['black',1],['white',1]],ceramic:[['rainbow',2]],blimp:[['ceramic',4]],fastBlimp:[['ceramic',3]],fortress:[['blimp',2],['fastBlimp',2]]};const SK='esperantoTDLearnScoresV4'"""
+          assert marker in s
+          s=s.replace(marker,child)
+
+          old="""function activeLanes(){if(wave<5)return[0];if(wave<9)return lanes.length>1?[0,1]:[0];if(wave<14)return [...Array(Math.min(2,lanes.length)).keys()];return [...Array(lanes.length).keys()]}"""
+          new="""function activeLanes(){let n=lanes.length;if(n<=1)return[0];if(wave<5)return[(wave-1)%n];if(wave<9){let a=(wave-1)%n,b=(a+1)%n;return a===b?[a]:[a,b]}if(wave<13){let a=(wave-1)%n;return [...new Set([a,(a+1)%n,(a+2)%n])]}return [...Array(n).keys()]}"""
+          assert old in s
+          s=s.replace(old,new)
+
+          # Natural rush waves every 5th wave, plus a smaller surge on every 3rd.
+          old="""for(let i=0;i<map.extra;i++)q.push({type:w<10?'yellow':w<20?'lead':'ceramic',lane:L[i%L.length]});return sh(q)}"""
+          new="""for(let i=0;i<map.extra;i++)q.push({type:w<10?'yellow':w<20?'lead':'ceramic',lane:L[i%L.length]});if(w%5===0){let rt=w<10?'pink':w<20?'armored':w<28?'ceramic':'fastBlimp',n=Math.min(20,6+Math.floor(w/2));for(let i=0;i<n;i++)q.push({type:rt,lane:L[i%L.length],rush:1})}else if(w%3===0){let rt=w<12?'yellow':w<22?'camoPink':'ceramic';for(let i=0;i<Math.min(10,3+Math.floor(w/4));i++)q.push({type:rt,lane:L[i%L.length],rush:1})}return sh(q)}"""
+          assert old in s
+          s=s.replace(old,new)
+
+          old="""function can(t,e){return !e.tag.includes('camo')||t.camo}"""
+          new="""function can(t,e){if(e.tag.includes('camo')&&!t.camo)return false;if(e.tag==='ceramic'&&!t.ceramicHit)return false;return true}"""
+          assert old in s
+          s=s.replace(old,new)
+
+          # Layer popping: destroyed balloons release their child layers at the same route position.
+          start=s.index("function kill(){")
+          end=s.index("function start(){",start)
+          kill="""function kill(){let born=[];for(let e of enemies)if(e.hp<=0){let p=point(e.lane,e.d),o=towers.find(t=>can(t,e)&&Math.hypot(t.x-p.x,t.y-p.y)<=t.range+25);if(o)o.xp+=e.tag.includes('blimp')||e.tag==='fortress'?3:e.tag==='ceramic'?1.5:e.tag.includes('armor')?1:.6;coins+=6+wave*.55+(e.tag.includes('blimp')?16:e.tag==='ceramic'?8:e.tag.includes('armor')?5:0);score+=10+wave;sfx('pop');let kids=CHILD[e.type]||[];for(let [kt,count] of kids)for(let i=0;i<count;i++){let b=B[kt],tag=b[4]||'',inheritCamo=e.tag.includes('camo')&&!tag.includes('camo');if(inheritCamo)tag='camo'+(tag?(' '+tag):'');let hp=b[0]*map.hp*(1+Math.max(0,wave-12)*.025);born.push({type:kt,lane:e.lane,d:Math.max(0,e.d-4-i*3),hp,max:hp,sp:b[1]*(58+wave*1.65)*map.speed,c:b[2],r:b[3],tag,w:Math.random()*6.28,slow:0})}}enemies=enemies.filter(e=>e.hp>0);enemies.push(...born)}"""
+          s=s[:start]+kill+s[end:]
+
+          # Make rush timing part of normal spawning; rush-tagged entries arrive in quick bursts.
+          old="""if(spawning){spawnT-=dt;if(spawnT<=0&&queue.length){spawn(queue.shift());spawnT=Math.max(.2,.5-wave*.005);if(!queue.length)spawning=false}}"""
+          new="""if(spawning){spawnT-=dt;if(spawnT<=0&&queue.length){let nxt=queue.shift();spawn(nxt);spawnT=nxt.rush?Math.max(.07,.14-wave*.0015):Math.max(.2,.5-wave*.005);if(!queue.length)spawning=false}}"""
+          assert old in s
+          s=s.replace(old,new)
+
+          # Cleaner winding tracks: shadow, outer berm, road, then center highlight so crossings read naturally.
+          b0=s.index("function bg(){")
+          b1=s.index("function range(",b0)
+          bg="""function bg(){cx.fillStyle=map.g;cx.fillRect(0,0,900,560);cx.fillStyle=map.g2;for(let i=0;i<28;i++){cx.beginPath();cx.arc((i*137+37)%900,(i*83+29)%560,9+(i%5)*3,0,7);cx.fill()}lanes.forEach((p,i)=>{cx.save();cx.lineJoin='round';cx.lineCap='round';cx.strokeStyle='#0002';cx.lineWidth=66;cx.beginPath();cx.moveTo(...p[0]);p.slice(1).forEach(q=>cx.lineTo(...q));cx.stroke();cx.strokeStyle=map.edge;cx.lineWidth=60;cx.stroke();cx.strokeStyle=map.road;cx.lineWidth=48;cx.stroke();cx.strokeStyle='#ffffff22';cx.lineWidth=3;cx.setLineDash([14,18]);cx.stroke();cx.setLineDash([]);cx.fillStyle='#172033bb';cx.font='900 12px system-ui';cx.fillText('Entry '+(i+1),p[0][0]===0?10:835,p[0][1]-29);cx.restore()})}"""
+          s=s[:b0]+bg+s[b1:]
+
+          # New towers start without camo or ceramic access and retain target priority.
+          s=s.replace("got:[],camo:0,armorBreak:0,targetMode:'closest'","got:[],camo:0,ceramicHit:0,armorBreak:0,targetMode:'closest'")
+          s=s.replace("${t.camo?' · Camo sight':''} · Target", "${t.camo?' · Camo sight':''}${t.ceramicHit?' · Ceramic breaker':''} · Target")
+
+          # Remove obsolete rush handler completely.
+          rs=s.find("$('rush').onclick=")
+          if rs!=-1:
+              re=s.find(";function dist(",rs)
+              assert re!=-1
+              s=s[:rs]+s[re+1:]
+
+          p.write_text(s)
+          PY
+          git config user.name "Esperanto Quest Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add tdlearn.html
+          git commit -m "Add layered balloons winding tracks and automatic rush waves"
+          git push
