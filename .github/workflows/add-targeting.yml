@@ -1,0 +1,37 @@
+name: Add defender targeting
+on:
+  push:
+    paths:
+      - .github/workflows/add-targeting.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add Closest First Last targeting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tdlearn.html')
+          s=p.read_text()
+          def rep(old,new,label):
+              global s
+              if old not in s:
+                  raise SystemExit(f'missing {label}')
+              s=s.replace(old,new,1)
+          rep('.upg.got{background:#edf9f1;border-color:#77b88c}', '.upg.got{background:#edf9f1;border-color:#77b88c}.targeting{margin:9px 0;padding:9px;background:#f5f7fb;border-radius:12px}.targeting b{display:block;margin-bottom:6px}.targetBtns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.targetBtn{box-shadow:none;border:2px solid #e1e6ef;background:#fff;padding:8px}.targetBtn.active{border-color:#6079d8;background:#eef2ff}', 'target css')
+          rep('<div class="xpbar"><span id="xpfill"></span></div><div id="ugrid"></div>', '<div class="xpbar"><span id="xpfill"></span></div><div id="targeting" class="targeting"><b>Target priority</b><div class="targetBtns"><button class="targetBtn" data-target="closest">Closest</button><button class="targetBtn" data-target="first">First</button><button class="targetBtn" data-target="last">Last</button></div><div class="small" style="margin-top:6px">Closest = nearest to this defender. First = furthest along its route. Last = furthest back.</div></div><div id="ugrid"></div>', 'target html')
+          rep("function target(t){let best,bd=-1;for(let e of enemies){if(!can(t,e))continue;let p=point(e.lane,e.d),d=Math.hypot(p.x-t.x,p.y-t.y);if(d<=t.range&&e.d>bd){best=e;bd=e.d}}return best}", "function target(t){let a=[];for(let e of enemies){if(!can(t,e))continue;let p=point(e.lane,e.d),dist=Math.hypot(p.x-t.x,p.y-t.y);if(dist<=t.range)a.push({e,dist,progress:e.d/lens[e.lane]})}if(!a.length)return;let m=t.targetMode||'closest';if(m==='first')a.sort((x,y)=>y.progress-x.progress||x.dist-y.dist);else if(m==='last')a.sort((x,y)=>x.progress-y.progress||x.dist-y.dist);else a.sort((x,y)=>x.dist-y.dist||y.progress-x.progress);return a[0].e}", 'target function')
+          rep("$('utext').textContent=`XP ${Math.floor(t.xp)} · Damage ${t.damage.toFixed(1)} · Range ${Math.round(t.range)}${t.camo?' · Camo sight':''}`;$('xpfill').style.width=Math.min(100,t.xp/cap*100)+'%';", "$('utext').textContent=`XP ${Math.floor(t.xp)} · Damage ${t.damage.toFixed(1)} · Range ${Math.round(t.range)}${t.camo?' · Camo sight':''} · Target ${(t.targetMode||'closest')[0].toUpperCase()+(t.targetMode||'closest').slice(1)}`;$('xpfill').style.width=Math.min(100,t.xp/cap*100)+'%';$('targeting').querySelectorAll('[data-target]').forEach(b=>{b.classList.toggle('active',b.dataset.target===(t.targetMode||'closest'));b.onclick=()=>{t.targetMode=b.dataset.target;sfx('ok');toast(t.name+' targeting: '+b.textContent);upgrades()}});", 'upgrade targeting hooks')
+          rep("towers.push({...t,type:selType,x,y,cd:.2,xp:0,got:[],camo:0,armorBreak:0})", "towers.push({...t,type:selType,x,y,cd:.2,xp:0,got:[],camo:0,armorBreak:0,targetMode:'closest'})", 'default closest')
+          p.write_text(s)
+          PY
+      - name: Commit targeting update
+        run: |
+          git config user.name "Esperanto Quest Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add tdlearn.html
+          git commit -m "Add Closest First Last defender targeting"
+          git push
