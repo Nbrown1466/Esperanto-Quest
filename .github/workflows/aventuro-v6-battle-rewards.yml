@@ -14,27 +14,19 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
           p=Path('aventuro.html')
           s=p.read_text()
-
-          s=s.replace("battle={boss,name:boss?'Floor '+S.floor+' Guardian':sp[0],dialogue:boss?'Strength alone will not get you through this.':sp[1],hp:(boss?18:7)+S.floor*2,max:(boss?18:7)+S.floor*2,atk:2+Math.floor(S.floor/2),mercy:0};renderBattle()",
-          "battle={boss,name:boss?'Floor '+S.floor+' Guardian':sp[0],dialogue:boss?'Strength alone will not get you through this.':sp[1],hp:(boss?22:10)+S.floor*3,max:(boss?22:10)+S.floor*3,atk:2+Math.floor(S.floor/2),mercy:0,turn:1,correct:0};renderBattle()")
-
+          s=s.replace("battle={boss,name:boss?'Floor '+S.floor+' Guardian':sp[0],dialogue:boss?'Strength alone will not get you through this.':sp[1],hp:(boss?18:7)+S.floor*2,max:(boss?18:7)+S.floor*2,atk:2+Math.floor(S.floor/2),mercy:0};renderBattle()","battle={boss,name:boss?'Floor '+S.floor+' Guardian':sp[0],dialogue:boss?'Strength alone will not get you through this.':sp[1],hp:(boss?22:10)+S.floor*3,max:(boss?22:10)+S.floor*3,atk:2+Math.floor(S.floor/2),mercy:0,turn:1,correct:0};renderBattle()")
           old="""function renderBattle(){let b=battle;$('modalBox').innerHTML='<div class=\"battleTop\"><div><h2>'+esc(b.name)+'</h2><div>'+esc(b.dialogue)+'</div></div><div>HP '+S.hp+'/'+S.maxHp+'<div class=\"hpbar\"><i style=\"width:'+100*S.hp/S.maxHp+'%\"></i></div><br>Enemy '+Math.max(0,b.hp)+'/'+b.max+'<div class=\"hpbar enemybar\"><i style=\"width:'+100*Math.max(0,b.hp)/b.max+'%\"></i></div></div></div><div id=\"battleText\" class=\"battleText\">Choose an action.</div><div class=\"battleActions\"><button data-a=\"attack\">FIGHT</button><button data-a=\"spell\">SPELL</button><button data-a=\"talk\">TALK</button><button data-a=\"defend\">GUARD</button><button data-a=\"run\">FLEE</button></div><div id=\"battleExtra\"></div>';$('modal').classList.add('show');document.querySelectorAll('[data-a]').forEach(x=>x.onclick=()=>battleAction(x.dataset.a))}"""
           new="""function renderBattle(){let b=battle;if(!b)return;let mood=b.mercy>=3?'The enemy no longer seems eager to fight.':b.mercy===2?'The enemy hesitates.':b.mercy===1?'The enemy is listening to you.':'The enemy watches your next move.';$('modalBox').innerHTML='<div class=\"battleTop\"><div><h2>'+esc(b.name)+'</h2><div>'+esc(b.dialogue)+'</div><div class=\"kicker\" style=\"margin-top:6px\">TURN '+b.turn+'</div></div><div>HP '+S.hp+'/'+S.maxHp+'<div class=\"hpbar\"><i style=\"width:'+100*S.hp/S.maxHp+'%\"></i></div><br>Enemy '+Math.max(0,b.hp)+'/'+b.max+'<div class=\"hpbar enemybar\"><i style=\"width:'+100*Math.max(0,b.hp)/b.max+'%\"></i></div></div></div><div id=\"battleText\" class=\"battleText\">'+esc(mood)+'</div><div class=\"battleActions\"><button data-a=\"attack\">FIGHT</button><button data-a=\"spell\">SPELL</button><button data-a=\"talk\">TALK</button><button data-a=\"defend\">GUARD</button><button data-a=\"run\">'+(b.mercy>=3?'SPARE':'FLEE')+'</button></div><div id=\"battleExtra\"></div>';$('modal').classList.add('show');document.querySelectorAll('[data-a]').forEach(x=>x.onclick=()=>battleAction(x.dataset.a))}"""
           if old not in s: raise SystemExit('renderBattle target not found')
           s=s.replace(old,new)
-
           old="""function battleAction(a){if(a==='attack')return timingAttack();if(a==='spell')return grammarSpell();if(a==='talk'){battle.mercy++;$('battleText').textContent=battle.dialogue+(battle.mercy>=2?' It seems less eager to fight.':'');if(battle.mercy>=3&&!battle.boss){setTimeout(()=>endBattle(false),600);return}return setTimeout(()=>enemyTurn(false),650)}if(a==='defend')return enemyTurn(true);if(a==='run'){if(battle.boss){$('battleText').textContent='There is nowhere to run from this guardian.';return}if(Math.random()<.55+battle.mercy*.12)return endBattle(false);return enemyTurn(false)}}"""
           new="""function battleAction(a){if(a==='attack')return timingAttack();if(a==='spell')return grammarSpell();if(a==='talk'){battle.mercy++;$('battleText').textContent=battle.dialogue+(battle.mercy>=3?' The tension finally leaves its posture.':battle.mercy===2?' It pauses instead of attacking immediately.':' It seems surprised that you answered with words.');return setTimeout(()=>enemyTurn(false),850)}if(a==='defend')return enemyTurn(true);if(a==='run'){if(battle.boss){$('battleText').textContent='There is nowhere to run from this guardian.';return}if(battle.mercy>=3)return spareBattle();if(Math.random()<.38+battle.mercy*.1)return escapeBattle();$('battleText').textContent='You try to escape, but the enemy cuts you off.';return setTimeout(()=>enemyTurn(false),650)}}"""
           if old not in s: raise SystemExit('battleAction target not found')
           s=s.replace(old,new)
-
           s=s.replace("btn.classList.add(ok?'good':'bad');learn(correct);setTimeout", "btn.classList.add(ok?'good':'bad');if(ok&&battle)battle.correct++;learn(correct);setTimeout")
-
           s=s.replace("else{window.removeEventListener('keydown',keyFn);ex.innerHTML='';renderBattle()}", "else{window.removeEventListener('keydown',keyFn);ex.innerHTML='';if(battle){battle.turn++;renderBattle()}}")
-
           old="""function winBattle(){let wasBoss=battle.boss;let gain=5+S.floor*2;S.gold+=gain;current().grid[S.y][S.x]='.';battle=null;if(wasBoss)return bossRiddle();endBattle(true)}"""
           new="""function rollBattleReward(wasBoss,spared){let gold=Math.max(3,(wasBoss?14:6)+S.floor*2+(spared?0:r(5)));let item=null,detail='';S.gold+=gold;let roll=r(100);if(wasBoss||roll<12){S.inventory.pocio=(S.inventory.pocio||0)+1;item='Potion';detail='A potion was added to your backpack.'}else if(roll<20){S.keys++;item='Key';detail='You found a key among the remains.'}else if(roll<25){S.maxHp++;S.hp=Math.min(S.maxHp,S.hp+2);item='Heart fragment';detail='Maximum health increased by 1.'}else if(roll<29){S.atk++;item='Sharpening stone';detail='Attack permanently increased by 1.'}return{gold,item,detail}}
 function showBattleReward(title,reward,extra){let lines='<p>You earned <b>'+reward.gold+' gold</b>.</p>'+(reward.item?'<p>You found: <b>'+esc(reward.item)+'</b><br>'+esc(reward.detail)+'</p>':'')+(extra?'<p>'+esc(extra)+'</p>':'');$('modalBox').innerHTML='<h2>'+esc(title)+'</h2><div class=\"battleText\">The battle is over, but the dungeon gives you a moment to breathe.</div>'+lines+'<button id=\"battleContinue\" style=\"width:100%\">CONTINUE</button>';$('modal').classList.add('show');$('battleContinue').onclick=()=>{$('modal').classList.remove('show');pending=false;lesson('The corridor is quiet again.');render()}}
@@ -43,20 +35,15 @@ function spareBattle(){let b=battle,correct=b.correct||0;current().grid[S.y][S.x
 function escapeBattle(){battle=null;$('modal').classList.remove('show');pending=false;lesson('You escape before the enemy can follow.');render()}"""
           if old not in s: raise SystemExit('winBattle target not found')
           s=s.replace(old,new)
-
-          # Keep endBattle for compatibility, but route it to the new behavior if used elsewhere.
           s=s.replace("function endBattle(win){battle=null;$('modal').classList.remove('show');pending=false;lesson(win?'You won the battle.':'You escaped the battle.');render()}","function endBattle(win){if(win&&battle)return winBattle();return escapeBattle()}")
-
-          # Make the battle instructions describe the fuller loop.
           s=s.replace("During battle, choose an action. FIGHT uses a timing strike followed by a bilingual Esperanto question. SPELL tests verb conjugation in both English and Esperanto. TALK can calm some enemies. GUARD reduces damage. FLEE may fail.","During battle, each turn has two halves: you choose an action, then the enemy attacks inside the battle box. FIGHT uses a timing strike followed by a bilingual Esperanto question. SPELL tests verb conjugation. TALK can make an enemy willing to be spared. GUARD reduces damage. FLEE may fail. Battles give gold and can drop useful items.")
-
           p.write_text(s)
           PY
       - name: Check JavaScript
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re, subprocess, tempfile
+          import re, subprocess
           s=Path('aventuro.html').read_text()
           js=re.findall(r'<script>(.*?)</script>',s,re.S)[-1]
           Path('/tmp/a.js').write_text(js)
@@ -69,3 +56,4 @@ function escapeBattle(){battle=null;$('modal').classList.remove('show');pending=
           git add aventuro.html
           git commit -m 'Extend battles and add victory rewards' || exit 0
           git push
+# trigger: 2
