@@ -1,0 +1,82 @@
+name: TD v22 difficulty visuals speed
+on:
+  push:
+    paths:
+      - '.github/workflows/td-v22-difficulty-visual-speed.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch difficulty visuals and speed controls
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('tdlearn.html')
+          s=p.read_text()
+
+          # Add speed controls to both the top bar and compact game controls.
+          s=s.replace('<button id="pauseBtn" disabled>Ⅱ Pause</button><button id="new">New game</button>', '<button id="pauseBtn" disabled>Ⅱ Pause</button><button id="speedBtn">Speed 1×</button><button id="new">New game</button>', 1)
+          s=s.replace('<div class="quickGame"><button id="quickPlay">▶ Play</button><button id="quickPause">Ⅱ Pause</button><button id="quickNew">↻ New</button></div>', '<div class="quickGame" style="grid-template-columns:repeat(4,1fr)"><button id="quickPlay">▶ Play</button><button id="quickPause">Ⅱ Pause</button><button id="quickSpeed">1×</button><button id="quickNew">↻ New</button></div>', 1)
+
+          # Shared speed state.
+          s=s.replace("mpRenderedQ='',oppLives=100", "mpRenderedQ='',simSpeed=1,oppLives=100", 1)
+          s=s.replace("qHostDone:mpQHostDone,qGuestDone:mpQGuestDone}", "qHostDone:mpQHostDone,qGuestDone:mpQGuestDone,simSpeed}", 1)
+          s=s.replace("mpQGuestDone=+m.qGuestDone||0;", "mpQGuestDone=+m.qGuestDone||0;simSpeed=[1,2,3].includes(+m.simSpeed)?+m.simSpeed:1;updateSpeedButtons();", 1)
+          s=s.replace("else if(m.action==='pause'){togglePauseShared()}", "else if(m.action==='pause'){togglePauseShared()}else if(m.action==='speed'){setSpeedShared(+m.speed)}", 1)
+
+          # Make later waves substantially tougher without removing the safety cap.
+          old="hp=b[0]*map.hp*(1+Math.max(0,wave-12)*.025)"
+          new="hp=b[0]*map.hp*(1+Math.max(0,wave-8)*.04+Math.max(0,wave-22)*.025)"
+          s=s.replace(old,new)
+          s=s.replace("sp=b[1]*(58+wave*1.65)*map.speed", "sp=b[1]*(58+wave*1.9)*map.speed*(1+Math.max(0,wave-18)*.006)")
+
+          # Add steady pressure balloons to later waves and strengthen rush waves.
+          s=s.replace("n=Math.min(20,6+Math.floor(w/2));", "n=Math.min(30,8+Math.floor(w*.7));", 1)
+          anchor="return sh(q)}function spawn(s)"
+          pressure="""if(w>=9){let pn=Math.min(22,Math.floor((w-7)*.8)),pt=w<14?'pink':w<20?'lead':w<25?'rainbow':w<29?'ceramic':'fastBlimp';for(let i=0;i<pn;i++)q.push({type:pt,lane:L[i%L.length],rush:i%3===0})}if(w>=18){let hn=Math.min(10,1+Math.floor((w-16)/3)),ht=w<24?'ceramic':w<29?'blimp':'fortress';for(let i=0;i<hn;i++)q.push({type:ht,lane:L[(i*2)%L.length]})}return sh(q)}function spawn(s)"""
+          if anchor not in s: raise SystemExit('plan anchor missing')
+          s=s.replace(anchor,pressure,1)
+
+          # Speed affects authoritative simulation and client-side visual interpolation.
+          s=s.replace("function tick(dt,now){if(mpMode&&!mpHost){", "function tick(dt,now){dt*=simSpeed;if(mpMode&&!mpHost){", 1)
+
+          # Better balloon/blimp art: bigger airships, richer shading, fins, seams, knots and strings.
+          m=re.search(r"function drawBalloon\(e\)\{.*?\}function draw\(\)\{", s, re.S)
+          if not m: raise SystemExit('drawBalloon block missing')
+          replacement=r'''function drawBalloon(e){let p=point(e.lane,e.d);cx.save();cx.translate(p.x,p.y+Math.sin(e.w)*1.3);let air=e.tag.includes('blimp')||e.tag==='fortress';if(air){let scale=e.tag==='fortress'?1.28:e.tag.includes('fast')?1.05:1,w=e.r*2.45*scale,h=e.r*1.08*scale,g=cx.createLinearGradient(-w, -h, w, h);g.addColorStop(0,'#ffffff55');g.addColorStop(.18,e.c);g.addColorStop(.72,e.c);g.addColorStop(1,'#11182766');cx.fillStyle=g;cx.strokeStyle='#1d2735';cx.lineWidth=3;cx.beginPath();cx.ellipse(0,0,w,h,0,0,7);cx.fill();cx.stroke();cx.fillStyle='#26394d';cx.beginPath();cx.moveTo(-w*.62,-h*.75);cx.lineTo(-w*.93,-h*1.25);cx.lineTo(-w*.25,-h*.78);cx.closePath();cx.fill();cx.beginPath();cx.moveTo(-w*.62,h*.75);cx.lineTo(-w*.93,h*1.25);cx.lineTo(-w*.25,h*.78);cx.closePath();cx.fill();cx.fillStyle='#dbeafe99';cx.beginPath();cx.ellipse(w*.48,-h*.12,w*.16,h*.27,0,0,7);cx.fill();cx.strokeStyle='#ffffff88';cx.lineWidth=4;cx.beginPath();cx.moveTo(-w*.18,-h*.87);cx.lineTo(-w*.18,h*.87);cx.stroke();cx.beginPath();cx.moveTo(w*.18,-h*.9);cx.lineTo(w*.18,h*.9);cx.stroke();if(e.tag==='fortress'){cx.strokeStyle='#f5c15b';cx.lineWidth=5;cx.beginPath();cx.ellipse(0,0,w*.72,h*.72,0,0,7);cx.stroke();cx.fillStyle='#26394d';for(let x of [-.42,0,.42]){cx.beginPath();cx.arc(w*x,0,5*scale,0,7);cx.fill()}}}else{let r=e.r,g=cx.createRadialGradient(-r*.35,-r*.5,2,0,0,r*1.25);g.addColorStop(0,'#ffffffcc');g.addColorStop(.18,e.c);g.addColorStop(1,'#11182755');cx.fillStyle=g;cx.strokeStyle='#ffffff77';cx.lineWidth=1.5;cx.beginPath();cx.ellipse(0,-2,r*.82,r*1.05,0,0,7);cx.fill();cx.stroke();cx.fillStyle=e.c;cx.beginPath();cx.moveTo(-4,r*.92);cx.lineTo(0,r*1.22);cx.lineTo(4,r*.92);cx.closePath();cx.fill();cx.strokeStyle='#33415588';cx.lineWidth=1;cx.beginPath();cx.moveTo(0,r*1.18);cx.quadraticCurveTo(5,r*1.55,-2,r*1.9);cx.stroke()}if(e.tag.includes('camo')){cx.strokeStyle='#175b31';cx.lineWidth=3;cx.setLineDash([5,4]);cx.beginPath();cx.ellipse(0,-2,air?e.r*2.0:e.r*.95,air?e.r*.78:e.r*1.05,0,0,7);cx.stroke();cx.setLineDash([])}if(!air&&(e.tag.includes('armor')||e.tag==='heavy'||e.tag==='ceramic')){cx.strokeStyle=e.tag==='ceramic'?'#6b3f20':'#30363d';cx.lineWidth=e.tag==='heavy'?5:4;cx.beginPath();cx.arc(0,-2,e.r*.96,.18,2.95);cx.stroke();cx.beginPath();cx.arc(0,-2,e.r*.96,3.35,6.05);cx.stroke()}if(e.tag.toLowerCase().includes('fast')){cx.strokeStyle='#fff';cx.lineWidth=2;cx.beginPath();cx.moveTo(-e.r*.55,0);cx.lineTo(0,-6);cx.lineTo(e.r*.55,0);cx.stroke()}cx.restore()}function draw(){'''
+          s=s[:m.start()]+replacement+s[m.end():]
+
+          # Speed button helpers and synchronized co-op command.
+          speed_code="""function updateSpeedButtons(){if($('speedBtn'))$('speedBtn').textContent='Speed '+simSpeed+'×';if($('quickSpeed'))$('quickSpeed').textContent=simSpeed+'×'}function setSpeedShared(v){simSpeed=[1,2,3].includes(v)?v:1;updateSpeedButtons();toast('Game speed '+simSpeed+'×');mpBroadcast()}function cycleSpeed(){let next=simSpeed===1?2:simSpeed===2?3:1;if(mpMode&&!mpHost){mpSend({type:'cmd',action:'speed',speed:next});return}setSpeedShared(next)}"""
+          marker="$('play').onclick=()=>"
+          if marker not in s: raise SystemExit('play handler marker missing')
+          s=s.replace(marker,speed_code+marker,1)
+          s=s.replace("$('quickPause').onclick=()=>$('pauseBtn').click();", "$('quickPause').onclick=()=>$('pauseBtn').click();$('quickSpeed').onclick=cycleSpeed;$('speedBtn').onclick=cycleSpeed;", 1)
+          s=s.replace("mpRenderedQ='';if(!mpMode)", "mpRenderedQ='';simSpeed=1;updateSpeedButtons();if(!mpMode)", 1)
+
+          p.write_text(s)
+          PY
+      - name: Check JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, tempfile, subprocess
+          s=Path('tdlearn.html').read_text()
+          scripts=re.findall(r'<script(?:[^>]*)>(.*?)</script>',s,re.S)
+          js='\n'.join(x for x in scripts if x.strip())
+          f=tempfile.NamedTemporaryFile('w',suffix='.js',delete=False)
+          f.write(js); f.close()
+          subprocess.run(['node','--check',f.name],check=True)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tdlearn.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Make TD waves harder, improve balloons, add speed control"
+          git push
