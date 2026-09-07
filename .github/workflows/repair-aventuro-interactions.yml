@@ -20,11 +20,7 @@ jobs:
           p=Path('aventuro.html')
           s=p.read_text()
           old_move="""function move(dx,dy){if(battle)return;let x=S.x+dx,y=S.y+dy,t=S.g[y]?.[x];if(!t||t=='#'){guide('A wall blocks the way.');hear();return render()}S.x=x;S.y=y;if(t=='M')startBattle();else if(t=='G'){S.g[y][x]='.';let z=5+r(8);S.gold+=z;guide('You find a small cache. '+z+' gold added.')}else if(t=='K'){S.g[y][x]='.';S.keys++;guide('You find a cold iron key.')}else if(t=='L'){S.g[y][x]='.';discoverLore()}else if(t=='T'){S.g[y][x]='.';let d=Math.max(1,2-S.def);S.hp-=d;guide('A hidden mechanism snaps shut. You lose '+d+' health.');if(S.hp<=0)return die()}else if(t=='E'){S.floor++;S.x=S.y=1;S.g=grid();S.seen={};S.hp=Math.min(S.max,S.hp+2);guide('You descend. The air tastes older on floor '+S.floor+'.');if(S.floor%4===0)S.potions++;}else guide(pick(['The corridor narrows around XII.','Torchlight catches old writing, but it flakes away before you can read it.','A draft carries the smell of wet stone.','For a moment, XII hears footsteps matching every step.']));hear();render()}"""
-          new_move=old_move
-          if old_move not in s:
-              raise SystemExit('expected move function not found in restored version')
-          # Preserve full question-mark interactions from the rich version.
-          # Add randomized indirect Esperanto hearing clues.
+          if old_move not in s: raise SystemExit('expected move function not found in restored version')
           start=s.index('function hear(){')
           end=s.index('\nfunction move(dx,dy)',start)
           hearing=r'''const hearClues={
@@ -36,7 +32,6 @@ L:['Malvarma aero fluas el tiu direkto.','Vi aŭdas paperecan susuron sen vento.
 E:['La aero antaŭ vi sonas pli vasta kaj malplena.','Longa eĥo revenas el tiu direkto.','Vi sentas malvarman trablovon kaj profundan resonon.','Viaj paŝoj revenas al vi pli malfrue de tie.','La mallumo tie ŝajnas gluti la sonojn.','Vi aŭdas venton kie vento ne devus ekzisti.','Profunda malplena sono venas de preter la koridoro.','La eĥo sugestas pli grandan spacon proksime.','Malforta aerfluo portas sonojn de loko pli profunda.','Sono iras for de vi anstataŭ reveni.']};
 function hear(){let found=[];for(let y=Math.max(1,S.y-3);y<=Math.min(H-2,S.y+3);y++)for(let x=Math.max(1,S.x-3);x<=Math.min(W-2,S.x+3);x++){let t=S.g[y][x],d=Math.abs(x-S.x)+Math.abs(y-S.y);if(d>0&&d<=4&&hearClues[t])found.push({t,d})}if(!found.length){$('hear').textContent=pick(['Nur silento ĉirkaŭas vin.','Vi aŭdas nur viajn proprajn paŝojn.','Nenio krom malproksima gutado atingas viajn orelojn.','La mallumo restas strange silenta.']);return}found.sort((a,b)=>a.d-b.d);$('hear').textContent=pick(hearClues[found[0].t])}'''
           s=s[:start]+hearing+s[end:]
-          # Add exactly-one-tile overworld keyboard movement; dodge mode keeps its own continuous controls.
           marker='newRun();\n</script></body></html>'
           keyboard=r'''let heldKeys=new Set();
 window.addEventListener('keydown',e=>{
@@ -61,3 +56,4 @@ newRun();
           git add aventuro.html
           git commit -m "Restore question-mark interactions and gameplay" || exit 0
           git push
+# trigger 2
