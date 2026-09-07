@@ -1,0 +1,29 @@
+name: Apply TD syntax fix
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-td-syntax-fix.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair invalid JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tdlearn.html')
+          s=p.read_text()
+          s=s.replace("(now<e.slow?.7:1)", "(now < e.slow ? .7 : 1)")
+          s=s.replace("t.damage*=now<damagePenalty?.75:1", "t.damage *= (now < damagePenalty ? .75 : 1)")
+          p.write_text(s)
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name 'Esperanto Quest Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add tdlearn.html
+          git diff --cached --quiet || git commit -m 'Repair tower defense JavaScript rendering'
+          git push
