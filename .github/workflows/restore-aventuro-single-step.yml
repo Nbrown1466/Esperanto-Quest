@@ -1,0 +1,48 @@
+name: Restore Vortaventuro single-step controls
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-aventuro-single-step.yml'
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore full game and patch controls
+        run: |
+          git show a861faa448a96e97efe704765eb784abc0e027f1:aventuro.html > aventuro.html
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('aventuro.html')
+          s=p.read_text()
+          old="""newRun();\n</script></body></html>"""
+          new="""let heldKeys=new Set();
+window.addEventListener('keydown',e=>{
+  if(!S||battle||document.getElementById('modal').classList.contains('show'))return;
+  const k=e.key.toLowerCase();
+  const dirs={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]};
+  if(!dirs[k]||e.repeat||heldKeys.has(k))return;
+  e.preventDefault();
+  heldKeys.add(k);
+  move(...dirs[k]);
+});
+window.addEventListener('keyup',e=>heldKeys.delete(e.key.toLowerCase()));
+window.addEventListener('blur',()=>heldKeys.clear());
+newRun();
+</script></body></html>"""
+          if old not in s: raise SystemExit('marker not found')
+          s=s.replace(old,new,1)
+          s=s.replace('Use the arrows to explore.','Use WASD or the arrow keys to explore one tile at a time.')
+          p.write_text(s)
+          PY
+      - name: Commit restored game
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add aventuro.html
+          git commit -m "Restore Vortaventuro and enforce one-tile keyboard movement" || exit 0
+          git push
