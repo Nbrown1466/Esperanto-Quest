@@ -1,0 +1,83 @@
+name: TD v15 powers and multiplayer
+on:
+  push:
+    paths:
+      - '.github/workflows/td-v15-powers-multiplayer.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit powers and add multiplayer
+        shell: python
+        run: |
+          from pathlib import Path
+          import re, subprocess
+          p=Path('tdlearn.html')
+          s=p.read_text()
+
+          # Power/stat corrections: make displayed speed upgrades mathematically accurate.
+          s=s.replace("t=>{t.rate*=.6;t.damage*=1.5}", "t=>{t.rate/=1.4;t.damage*=1.5}")
+          s=s.replace("t=>{t.rate*=.5;t.damage*=1.6}", "t=>{t.rate/=1.5;t.damage*=1.6}")
+          s=s.replace("t=>{t.rate*=.55;t.damage*=1.75}", "t=>{t.rate/=1.45;t.damage*=1.75}")
+
+          # Frost upgrades now actually use their configured slow values instead of a hard-coded 0.7.
+          s=s.replace("if(t.slow&&e.tag!=='slow')e.slow=Math.max(e.slow,now+1400)", "if(t.slow&&e.tag!=='slow'){e.slow=Math.max(e.slow,now+1400);e.slowFactor=Math.min(e.slowFactor||1,t.slow)}")
+          s=s.replace("e.sp*speed*(now < e.slow ? .7 : 1)*dt", "e.sp*speed*(now < e.slow ? (e.slowFactor||.7) : 1)*dt")
+
+          # Fix fast visual detection for camelCase tags and remove old no-op.
+          s=s.replace("if(e.tag.includes('fast'))", "if(e.tag.toLowerCase().includes('fast'))")
+          s=s.replace("preview=null;$('.x');document.querySelectorAll('.tower')", "preview=null;document.querySelectorAll('.tower')")
+
+          # PeerJS provides lightweight browser-to-browser rooms on static GitHub Pages.
+          if 'peerjs@1.5.5' not in s:
+            s=s.replace('<script src="n1.js"></script>', '<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script><script src="n1.js"></script>')
+
+          # Multiplayer panel before defender shop.
+          marker='<div class="panel"><h3>Defender shop</h3>'
+          mp='''<div class="panel" id="mpPanel"><h3>Multiplayer Battle</h3><div class="small">Host a 1v1 room or join with a code. Each player defends their own map and can send attack balloons to the other player.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px"><button id="hostMp">Host game</button><button id="joinMp">Join game</button></div><input id="mpCodeInput" maxlength="6" placeholder="6-letter code" style="width:100%;margin-top:7px;padding:10px;border:2px solid #80551f;border-radius:10px;font:inherit;text-transform:uppercase"><div id="mpStatus" class="small" style="margin-top:7px;font-weight:900">Not connected</div><div id="mpRoom" style="display:none;margin-top:7px;padding:8px;border-radius:10px;background:#fff8cf"><b>Room code: <span id="mpCode"></span></b><div class="small">Share this code with the other player.</div></div><div id="mpBattle" style="display:none;margin-top:9px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><div class="stat">Opponent lives<b id="oppLives">100</b></div><div class="stat">Opponent wave<b id="oppWave">0</b></div></div><b style="display:block;margin:8px 0 5px">Send balloons</b><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"><button class="sendBalloon" data-send="red" data-cost="20" data-count="5">Red ×5<br><span class="small">20</span></button><button class="sendBalloon" data-send="pink" data-cost="70" data-count="4">Pink ×4<br><span class="small">70</span></button><button class="sendBalloon" data-send="lead" data-cost="140" data-count="3">Lead ×3<br><span class="small">140</span></button></div><div class="small" style="margin-top:6px">Sent balloons enter your opponent’s next available spawn queue. Questions still pause only your own board.</div></div></div>'''
+          if 'id="mpPanel"' not in s:
+            if marker not in s: raise SystemExit('shop marker missing')
+            s=s.replace(marker,mp+marker,1)
+
+          # Add multiplayer state variables.
+          s=s.replace("manualPause=0,started=0,last=performance.now();", "manualPause=0,started=0,peer=null,conn=null,mpMode=0,oppLives=100,oppWave=0,mpWon=0,last=performance.now();")
+
+          # Inject multiplayer functions before audio helper.
+          anchor='function au(){'
+          funcs=r'''function mpStatus(t){let e=$('mpStatus');if(e)e.textContent=t}function mpSend(o){try{if(conn&&conn.open)conn.send(o)}catch(e){}}function mpSync(){if(!mpMode)return;mpSend({type:'state',lives:lives,wave:wave,score:score})}function mpSetup(c){conn=c;mpMode=1;$('mpBattle').style.display='block';mpStatus('Connected — battle ready');c.on('data',m=>{if(!m||!m.type)return;if(m.type==='state'){oppLives=m.lives;oppWave=m.wave;$('oppLives').textContent=Math.max(0,Math.floor(oppLives));$('oppWave').textContent=oppWave||0;if(oppLives<=0&&!mpWon){mpWon=1;toast('You win the multiplayer battle!');sfx('ok')}}else if(m.type==='attack'){let L=[...Array(lanes.length).keys()];for(let i=0;i<(m.count||1);i++)queue.push({type:m.balloon,lane:L[i%L.length],rush:1,pvp:1});spawning=true;toast('Opponent sent '+(m.count||1)+' '+m.balloon+' balloons');sfx('alarm')}else if(m.type==='start'&&!started){start()}});c.on('close',()=>{mpMode=0;mpStatus('Opponent disconnected')});c.on('error',()=>mpStatus('Connection error'))}function hostMp(){if(typeof Peer==='undefined')return mpStatus('Multiplayer service failed to load');let code='';let chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(let i=0;i<6;i++)code+=chars[Math.floor(Math.random()*chars.length)];if(peer)try{peer.destroy()}catch(e){}peer=new Peer('esperanto-td-'+code);mpStatus('Opening room…');peer.on('open',()=>{$('mpRoom').style.display='block';$('mpCode').textContent=code;mpStatus('Waiting for opponent…')});peer.on('connection',c=>{if(conn&&conn.open){c.close();return}mpSetup(c)});peer.on('error',e=>mpStatus('Room error — try hosting again'))}function joinMp(){if(typeof Peer==='undefined')return mpStatus('Multiplayer service failed to load');let code=($('mpCodeInput').value||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);if(code.length!==6)return mpStatus('Enter the 6-character room code');if(peer)try{peer.destroy()}catch(e){}peer=new Peer();mpStatus('Joining '+code+'…');peer.on('open',()=>{let c=peer.connect('esperanto-td-'+code,{reliable:true});c.on('open',()=>mpSetup(c));c.on('error',()=>mpStatus('Could not join that room'))});peer.on('error',()=>mpStatus('Could not connect to multiplayer service'))}function sendMpBalloon(type,cost,count){if(!mpMode||!conn||!conn.open)return toast('Join a multiplayer room first');if(!started)return toast('Start the match first');if(coins<cost)return toast('Need '+cost+' coins');coins-=cost;mpSend({type:'attack',balloon:type,count:count});toast('Sent '+count+' '+type+' balloons');hud()}'''
+          if 'function hostMp()' not in s:
+            if anchor not in s: raise SystemExit('audio anchor missing')
+            s=s.replace(anchor,funcs+anchor,1)
+
+          # Sync state on wave start and leaks/game over.
+          s=s.replace("sfx('wave');toast(map.short+' · Wave '+wave);hud()", "sfx('wave');toast(map.short+' · Wave '+wave);hud();mpSync()")
+          s=s.replace("lives-=leakDamage(e);sfx('bad');if(lives<=0)return gameEnd()", "lives-=leakDamage(e);sfx('bad');mpSync();if(lives<=0)return gameEnd()")
+          s=s.replace("$('over').classList.add('show');sfx('bad')", "$('over').classList.add('show');mpSync();sfx('bad')")
+
+          # Host can trigger both boards with Play; peer receiving start starts locally.
+          s=s.replace("$('play').onclick=()=>{if(!started&&!over)start()};", "$('play').onclick=()=>{if(!started&&!over){if(mpMode)mpSend({type:'start'});start()}};")
+
+          # Multiplayer UI handlers before sound handler.
+          h="$('sound').onclick=()=>{"
+          inject="$('hostMp').onclick=hostMp;$('joinMp').onclick=joinMp;document.querySelectorAll('.sendBalloon').forEach(b=>b.onclick=()=>sendMpBalloon(b.dataset.send,+b.dataset.cost,+b.dataset.count));"
+          if inject not in s:
+            if h not in s: raise SystemExit('sound handler anchor missing')
+            s=s.replace(h,inject+h,1)
+
+          # Reset local match but keep active peer room; reset opponent display only when not connected.
+          s=s.replace("damagePenalty=0;$('upanel')", "damagePenalty=0;mpWon=0;if(!mpMode){oppLives=100;oppWave=0;if($('oppLives'))$('oppLives').textContent='100';if($('oppWave'))$('oppWave').textContent='0'};$('upanel')")
+
+          p.write_text(s)
+          m=re.search(r'<script>(.*)</script></body>',s,re.S)
+          if not m: raise SystemExit('inline JS not found')
+          Path('/tmp/td.js').write_text(m.group(1))
+          subprocess.run(['node','--check','/tmp/td.js'],check=True)
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add tdlearn.html
+          git diff --cached --quiet || (git commit -m "Audit defender powers and add peer multiplayer" && git push)
