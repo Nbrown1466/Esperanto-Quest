@@ -17,11 +17,17 @@ Open http://127.0.0.1:8080/ for the collection, or http://127.0.0.1:8080/aventur
 Explore endless generated floors, follow directional sound clues, and discover unknown encounters marked with the same `?` symbol. Friends reveal as `☻` after meeting them; monsters reveal as `♟` within two visible tiles and stay recognizable while in sight. Meet generated travelers and merchants, collect supplies, and survive creatures that patrol in real time and chase when they see you. Dialogue and combat pause the dungeon.
 
 - Move one tile with WASD, arrow keys, or the direction buttons.
-- Use FIGHT or ACT to answer Esperanto questions, then dodge with WASD, arrows, or dragging your heart.
-- Correct answers grant a shield; two successful ACT answers unlock MERCY after dodging.
-- Use ITEM for a potion. Escape pauses the dodge arena. Gentle mode slows attacks.
+- Choose BATALU (fight) or PAROLU (talk) to answer Esperanto questions, then dodge with WASD, arrows, or dragging your heart.
+- Each successful dodge runs through three waves. White lanes must be avoided, blue lanes are safe only while still, and orange lanes are safe only while moving; warnings telegraph the rule before the active hit window. Later floors and repeated turns increase speed and density.
+- Correct answers grant a shield; two successful PAROLU answers unlock INDULGU (spare) after dodging.
+- Choose UZU (use) for a potion. Escape pauses the dodge arena. Gentle mode slows attacks.
+- Character dialogue, shops, and controls use Esperanto. “Montri la anglan” reveals an English translation of the current conversation; vocabulary questions keep English answer meanings.
 - Find a key and stairs to descend. Your best floor reached is saved in this browser; the current run is not saved on refresh.
 - The right panel scrolls independently to keep supplies, notebook, lore, and log accessible.
+
+## Balloon Defense
+
+Open http://127.0.0.1:8080/tdlearn.html for the cohesive tower-defense learning game. Choose a battlefield and learning deck, place one of six defender classes beside the paths, and use the side-panel tabs to manage upgrades, co-op play, and high scores. The battlefield stays large while the controls remain organized in a scrollable panel; placement feedback, target priority, XP, and question breaks are kept in one visual system.
 
 ## Verify
 

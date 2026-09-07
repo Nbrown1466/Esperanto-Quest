@@ -72,7 +72,7 @@ function test(name, body) { try { body(); checks++; console.log(`PASS ${name}`);
 // Gameplay checks are appended after the implementation is available.
 test('startup initializes a playable state and opening note', () => {
  assert.equal(run('S.hp'), 20); assert.equal(run('S.floor'), 1);
- assert.match(elements.get('box').innerHTML, /A note in your coat/);
+ assert.match(elements.get('box').innerHTML, /Noto en via mantelo/);
  assert.equal(elements.get('map').children.length, 225);
 });
 test('200 generated dungeons have connected passages and all required objects', () => {
@@ -97,7 +97,7 @@ test('gold, chest, key, and lore consume their tiles once', () => {
  run('S.g[3][3]="L";move(0,1)');assert.equal(run('S.lore.length'),1);assert.ok(elements.get('modal').classList.contains('show'));run('closeModal()');
 });
 test('potions cap healing, report actual gain, and full-health use is free',()=>{
- run('S.hp=18;potion()');assert.equal(run('S.hp'),20);assert.equal(run('S.potions'),2);assert.match(run('S.log.at(-1)'),/2 health/);run('potion()');assert.equal(run('S.potions'),2);
+ run('S.hp=18;potion()');assert.equal(run('S.hp'),20);assert.equal(run('S.potions'),2);assert.match(run('S.log.at(-1)'),/2 vivpoentojn/);run('potion()');assert.equal(run('S.potions'),2);
 });
 test('stairs require a key and floor progression preserves inventory and notebook',()=>{
  run('newRun();closeModal();S.monsters=[];S.g[1][2]="E";move(1,0);descend()');assert.equal(run('S.floor'),1);
@@ -119,7 +119,7 @@ test('two ACT turns build trust without damage and mercy requires finishing dodg
  assert.equal(run('battle'),null);assert.equal(run('S.mercy'),1);assert.equal(run('S.gold'),8);assert.equal(run('S.g[1][2]'),'.');
 });
 test('wrong answer teaches without instant damage and creates a longer dodge',()=>{
- freshBattle();run('chooseAction("fight");answer(battle.options.findIndex(x=>x!==battle.word.en))');assert.equal(run('S.hp'),20);assert.equal(run('battle.hp'),10);assert.equal(run('battle.shield'),0);assert.equal(run('Object.keys(S.notebook).length'),1);run('startDodge()');assert.equal(run('battle.duration'),11);
+ freshBattle();run('chooseAction("fight");answer(battle.options.findIndex(x=>x!==battle.word.en))');assert.equal(run('S.hp'),20);assert.equal(run('battle.hp'),10);assert.equal(run('battle.shield'),0);assert.equal(run('Object.keys(S.notebook).length'),1);run('startDodge()');assert.equal(run('battle.duration'),15);
 });
 test('shield absorbs a hit and invulnerability prevents consecutive-frame damage',()=>{
  freshBattle();correct();run('startDodge()');collide();assert.equal(run('S.hp'),20);assert.equal(run('battle.shield'),0);collide();assert.equal(run('S.hp'),20);
@@ -167,6 +167,10 @@ test('dodge substeps produce the same state for 100 ms or five 20 ms frames',()=
  setup();run('for(let i=0;i<5;i++)updateDodge(.02)');const split=JSON.parse(run('JSON.stringify({elapsed:battle.elapsed,heart:battle.heart,bullets:battle.bullets})'));
  assert.ok(Math.abs(single.elapsed-split.elapsed)<1e-12);assert.ok(Math.abs(single.heart.x-split.heart.x)<1e-12);assert.ok(Math.abs(single.bullets[0].y-split.bullets[0].y)<1e-12);
 });
+test('dodge rounds have three escalating waves, telegraphed rules, and deeper-floor pressure',()=>{
+ freshBattle();correct('fight');run('startDodge()');assert.equal(run('battle.duration'),12);assert.equal(run('battle.stage'),0);run('spawnHazard()');assert.equal(run('battle.hazards.length'),1);assert.ok(run('battle.hazards[0].warning')>0);assert.equal(run('attackHurts("still",false)'),false);assert.equal(run('attackHurts("still",true)'),true);assert.equal(run('attackHurts("move",false)'),true);run('battle.elapsed=4.1;stepDodge(.01)');assert.equal(run('battle.stage'),1);run('battle.elapsed=8.1;stepDodge(.01)');assert.equal(run('battle.stage'),2);
+ run('battle.turn=3;battle.correct=false;battle.assist=false');const tuning=run('combatTuning(battle)');assert.ok(tuning.duration>=16);assert.ok(tuning.speed>30);run('battle.assist=true');assert.equal(run('combatTuning(battle).duration'),7);run('stopDodge()');
+});
 test('NPC conversation reveals choices, teaches a word, and limits gifts',()=>{
  run('newRun();closeModal();S.monsters=[];S.g[1][2]="N";move(1,0)');assert.equal(run('storySession.kind'),'npc');const word=run('storySession.person.word'),meaning=run('storySession.person.meaning');run('storyReveal();storyChoose(0)');assert.equal(run('S.notebook')[word],meaning);
  run('storyReveal();storyBack();storyReveal();storyChoose(2);storyReveal();storyChoose(1)');assert.equal(run('S.potions'),3);assert.equal(run('S.notebook.dankon'),'thank you');run('claimStoryGift("potion")');assert.equal(run('S.potions'),3);run('closeStory()');assert.equal(run('storySession'),null);assert.equal(elements.get('modal').classList.contains('show'),false);
@@ -185,7 +189,7 @@ test('unvisited encounters and distant monsters share a generic appearance',()=>
  emptyFloor();carve([[2,1],[3,1],[4,1]]);const appearances=[];
  for(const tile of ['M','N','B','T','G','K','L','E']){run(`S.g[1][4]='${tile}';render()`);const cell=elements.get('map').children[19];appearances.push([cell.textContent,cell.title,cell.className]);}
  run('S.g[1][4]="."');addRoamer('r',4,1);run('render()');const cell=elements.get('map').children[19];appearances.push([cell.textContent,cell.title,cell.className]);
- for(const appearance of appearances)assert.deepEqual(appearance,['?','Unknown presence','cell floor mystery']);
+ for(const appearance of appearances)assert.deepEqual(appearance,['?','Nekonata ĉeesto','cell floor mystery']);
 });
 test('idle scheduled ticks move visible creatures and trigger battle without a player turn',()=>{
  emptyFloor();carve([[1,1],[2,1],[3,1],[4,1]]);addRoamer('a',4,1);
@@ -219,7 +223,7 @@ test('heard clues follow corridor distance and closest three sources',()=>{
  run('S.g[1][2]="#";S.g[2][2]="#";S.g[2][3]="#"');assert.equal(run('nearbySounds().some(s=>s.x>=3)'),false);
 });
 test('fog remembers terrain without revealing stale moving encounters',()=>{
- emptyFloor();carve([[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[8,1],[9,1]]);addRoamer('a',2,1);run('render();S.x=9;render()');const cell=elements.get('map').children[17];assert.equal(cell.textContent,'');assert.equal(cell.title,'Passage');assert.equal(cell.className,'cell floor seen');
+ emptyFloor();carve([[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[8,1],[9,1]]);addRoamer('a',2,1);run('render();S.x=9;render()');const cell=elements.get('map').children[17];assert.equal(cell.textContent,'');assert.equal(cell.title,'Koridoro');assert.equal(cell.className,'cell floor seen');
 });
 test('one thousand floors initialize with valid entities, score and names',()=>{
  run('newRun();closeModal();for(let depth=1;depth<=1000;depth++){S.floor=depth;loadFloor();if(S.monsters.length!==3||!S.floorName||!S.g.flat().includes("E")||!S.g.flat().includes("K"))throw new Error("Invalid floor "+depth);}render()');assert.equal(run('S.floor'),1000);assert.equal(run('bestFloor'),1000);assert.equal(storage.get(run('BEST_FLOOR_KEY')),'1000');assert.match(String(elements.get('floor').textContent),/1000/);assert.doesNotMatch(String(elements.get('floorName').textContent),/undefined/);
@@ -270,5 +274,22 @@ test('visited friends remain recognizable during backtracking and in explored fo
 });
 test('floor changes reset remembered friend and monster discoveries',()=>{
  run('S.revealedFriends["2,1"]=true;S.revealedMonsters["3,1"]=true;loadFloor()');assert.equal(run('Object.keys(S.revealedFriends).length'),0);assert.equal(run('Object.keys(S.revealedMonsters).length'),0);assert.equal(run('S.monsters.some(m=>m.revealed)'),false);
+});
+test('all generated character dialogue has authored Esperanto translations',()=>{
+ const untranslated=run(`Object.values(storyPeople).flatMap(person=>[person.role,person.place,...person.greetings,...person.lessons.map(lesson=>lesson[2]),person.lore,person.wish,person.reply,person.offer,...person.cups,...person.parcels]).concat(storyTraits.flatMap(trait=>[trait.name,trait.line])).filter(line=>toEsperanto(line)===line)`);
+ assert.equal(untranslated.length,0,JSON.stringify(untranslated));
+});
+test('NPCs speak Esperanto first and English reading support cannot change rewards or choices',()=>{
+ run('newRun();closeModal();openNPC();storyReveal()');
+ assert.notEqual(run('storySession.line'),run('storySession.translation'));
+ assert.match(elements.get('box').innerHTML,/lang="eo"/);assert.match(elements.get('box').innerHTML,/id="storyTranslation" lang="en" hidden/);
+ assert.match(elements.get('storyChoices').innerHTML,/Instruu al mi vorton/);
+ document.getElementById('storyTranslation').hidden=true;
+ const before=run('JSON.stringify([S.hp,S.gold,S.potions,storySession.line,storySession.choices.map(choice=>choice.label)])');
+ run('toggleStoryTranslation()');assert.equal(elements.get('storyTranslation').hidden,false);assert.equal(elements.get('storyTranslate').getAttribute('aria-expanded'),'true');
+ run('toggleStoryTranslation()');assert.equal(elements.get('storyTranslation').hidden,true);assert.equal(run('JSON.stringify([S.hp,S.gold,S.potions,storySession.line,storySession.choices.map(choice=>choice.label)])'),before);
+ run('storyLesson();storyReveal()');assert.match(run('storySession.line'),/signifas/);assert.match(run('storySession.translation'),/means/);assert.match(elements.get('storyChoices').innerHTML,/Mi memoros/);
+ run('S.mercy=2;storyLore()');assert.match(run('storySession.line'),/vi indulgis 2 estaĵojn/);assert.match(run('storySession.translation'),/spared 2 creatures/);
+ run('closeStory();openShop()');assert.match(elements.get('box').innerHTML,/VIA ORO/);assert.match(elements.get('box').innerHTML,/Reen al la haloj/);run('closeStory()');
 });
 console.log(`${checks} regression checks passed.`);
