@@ -1,0 +1,49 @@
+name: Vortaventuro v4 character instructions and dodge fix
+on:
+  push:
+    paths:
+      - '.github/workflows/aventuro-v4-character-dodge-fix.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Vortaventuro
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('aventuro.html')
+          s=p.read_text()
+          s=s.replace('<div class="kicker">ENGLISH INSTRUCTIONS</div><div id="instruction" class="instruction">Explore one tile at a time. Your torch reveals nearby spaces. Unknown objects remain ? until you reach them.</div><div class="kicker" style="margin-top:9px">ESPERANTO WORLD</div>', '<div class="kicker">THE GUIDE</div><div id="instruction" class="instruction">You wake with a torch in one hand and no memory of how you came here. The dark does not give up its secrets easily. Move carefully. Listen to what the dungeon tells you.</div><div class="kicker" style="margin-top:9px">WHAT YOU HEAR</div>')
+          old="function help(){$('modalBox').innerHTML='<h2>How to play</h2><p>Move one tile at a time. On iPad and mobile, use the large directional pad under the map. Your torch only reveals nearby tiles. Anything interactive stays as <b>?</b> until you reach it.</p><p>Dungeons are procedural. They contain locked doors, keys, traps, treasure, monsters, bosses, and exits. Every fourth floor is an Esperanto-only village.</p><p>Combat uses Esperanto commands. <b>SORĈU</b> casts stronger attacks by correctly conjugating verbs. Bosses test comprehension of Esperanto clues, not just isolated word memorization.</p><p>Your gear includes <b>glavo</b>, <b>ŝildo</b>, and <b>ringo</b>. Potions stay in your bag. The Notebook automatically records new Esperanto words during the run.</p><p>Fog memory is kept separately for every generated floor during your run.</p><button id=\"closeHelp\">Close</button>';$('modal').classList.add('show');$('closeHelp').onclick=closeModal}"
+          new="function help(){$('modalBox').innerHTML='<h2>A note pinned to your coat</h2><p><i>If you can read this, you are still alive.</i></p><p>Your torch will show you only what is close. The rest of this place prefers to remain unknown. Do not trust a <b>?</b> until you stand beside it.</p><p>The creatures here understand one language: Esperanto. If you fight, speak carefully. A well-formed verb can cut deeper than steel.</p><p>Keep what you find. A <b>glavo</b> may save you. A <b>ŝildo</b> may save you longer. Rings are stranger. Potions are best saved until you are certain you need them.</p><p>If you reach people, listen before you act. They will not translate themselves for you.</p><p>And write things down. The words you learn may be the only map that matters.</p><p><i>— Someone who did not make it back</i></p><button id=\"closeHelp\">Fold the note</button>';$('modal').classList.add('show');$('closeHelp').onclick=closeModal}"
+          if old not in s: raise SystemExit('help anchor not found')
+          s=s.replace(old,new)
+          old2="let arena=$('arena'),soul=$('soul'),x=50,y=78,haz=[],good=pick(['ŝildo','sekura','defendu','rapide','maldekstre']);"
+          new2="let arena=$('arena'),soul=$('soul'),x=50,y=78,haz=[],good=pick(['ŝildo','sekura','defendu','rapide','maldekstre']),lastHit=0;"
+          if old2 not in s: raise SystemExit('arena anchor not found')
+          s=s.replace(old2,new2)
+          old3="if(Math.abs(h.x-x)<8&&Math.abs(h.y-y)<7){S.hp-=Math.max(1,battle.atk-S.def-(block?1:0));h.y=120;if(S.hp<=0){window.removeEventListener('keydown',keyFn);return die()}}"
+          new3="let sr=soul.getBoundingClientRect(),hr=h.el.getBoundingClientRect(),touch=sr.left<hr.right&&sr.right>hr.left&&sr.top<hr.bottom&&sr.bottom>hr.top;if(touch&&t-lastHit>450){lastHit=t;let dmg=Math.max(1,battle.atk-S.def-(block?1:0));S.hp-=dmg;h.y=120;soul.classList.add('bad');setTimeout(()=>soul.classList.remove('bad'),180);let bt=$('battleText');if(bt)bt.textContent='La malamiko trafas vin! -'+dmg+' vivo.';if(S.hp<=0){window.removeEventListener('keydown',keyFn);return die()}}"
+          if old3 not in s: raise SystemExit('collision anchor not found')
+          s=s.replace(old3,new3)
+          p.write_text(s)
+          PY
+      - name: Check JavaScript
+        run: |
+          python - <<'PY'
+          import re, pathlib
+          s=pathlib.Path('aventuro.html').read_text()
+          js=re.findall(r'<script>(.*?)</script>',s,re.S)[-1]
+          pathlib.Path('/tmp/aventuro.js').write_text(js)
+          PY
+          node --check /tmp/aventuro.js
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aventuro.html
+          git commit -m "Make instructions in-character and require actual dodge collision" || exit 0
+          git push
