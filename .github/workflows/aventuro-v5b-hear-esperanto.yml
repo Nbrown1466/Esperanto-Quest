@@ -1,0 +1,40 @@
+name: Vortaventuro v5b Esperanto hearing
+on:
+  push:
+    paths:
+      - '.github/workflows/aventuro-v5b-hear-esperanto.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keep What You Hear in Esperanto
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('aventuro.html')
+          s=p.read_text()
+          old="function directionHint(){let F=current(),targets=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++)if('MBEGKDTNS'.includes(F.grid[y][x]))targets.push([x,y,F.grid[y][x]]);if(!targets.length)return;targets.sort((a,b)=>md(S.x,S.y,a[0],a[1])-md(S.x,S.y,b[0],b[1]));let [x,y,t]=targets[0],d=md(S.x,S.y,x,y);if(d>6)return lesson('Something moves somewhere in the darkness.');let dir=Math.abs(x-S.x)>Math.abs(y-S.y)?(x>S.x?'to your right':'to your left'):(y>S.y?'below you':'above you');let clue=t==='M'||t==='B'?'You hear difficult breathing':t==='G'||t==='K'?'Something glitters':t==='E'?'You feel cold air':t==='N'||t==='S'?'You hear voices':'Something feels strange';lesson(clue+' '+dir+'. '+(d<=2?'It is very close.':d<=4?'It is close.':'It is not too far away.'))}"
+          new="function directionHint(){let F=current(),targets=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++)if('MBEGKDTNS'.includes(F.grid[y][x]))targets.push([x,y,F.grid[y][x]]);if(!targets.length)return;targets.sort((a,b)=>md(S.x,S.y,a[0],a[1])-md(S.x,S.y,b[0],b[1]));let [x,y,t]=targets[0],d=md(S.x,S.y,x,y);if(d>6)return lesson('Io moviĝas ie en la mallumo.',['io','moviĝas','mallumo']);let dir=Math.abs(x-S.x)>Math.abs(y-S.y)?(x>S.x?'dekstre':'maldekstre'):(y>S.y?'malsupre':'supre');let clue=t==='M'||t==='B'?'Vi aŭdas malfacilan spiradon':t==='G'||t==='K'?'Io briletas':t==='E'?'Vi sentas malvarman aeron':t==='N'||t==='S'?'Vi aŭdas voĉojn':'Vi sentas ion strangan';lesson(clue+' '+dir+'. '+(d<=2?'Ĝi estas tre proksime.':d<=4?'Ĝi estas proksime.':'Ĝi estas ne tro malproksime.'),[dir,'proksime','aŭdas','sentas'])}"
+          if old not in s:
+              raise SystemExit('directionHint block not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Check JavaScript
+        run: |
+          python - <<'PY'
+          import re, pathlib
+          s=pathlib.Path('aventuro.html').read_text()
+          js=re.findall(r'<script>(.*?)</script>',s,re.S)[-1]
+          pathlib.Path('/tmp/a.js').write_text(js)
+          PY
+          node --check /tmp/a.js
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add aventuro.html
+          git commit -m 'Keep What You Hear clues in Esperanto'
+          git push
