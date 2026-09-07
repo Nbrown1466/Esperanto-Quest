@@ -1,0 +1,56 @@
+name: Fix Vortaventuro battles
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-aventuro-battles.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Restore and patch Vortaventuro
+        run: |
+          git show HEAD^:aventuro.html > aventuro.html
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('aventuro.html')
+          s=p.read_text()
+          s=s.replace("hp:(boss?18:7)+S.floor*2,max:(boss?18:7)+S.floor*2,atk:2+Math.floor(S.floor/2),mercy:0", "hp:(boss?24:12)+S.floor*3,max:(boss?24:12)+S.floor*3,atk:2+Math.floor(S.floor/2),mercy:0,turn:1,correct:0")
+          s=s.replace("function renderBattle(){let b=battle;$('modalBox').innerHTML=", "function renderBattle(){let b=battle;if(!b)return;$('modalBox').innerHTML=")
+          s=s.replace("<div id=\"battleText\" class=\"battleText\">Choose an action.</div>", "<div id=\"battleText\" class=\"battleText\">Turn '+(b.turn||1)+'. Choose an action.</div>")
+          s=s.replace("if(battle.mercy>=3&&!battle.boss){setTimeout(()=>endBattle(false),600);return}", "if(battle.mercy>=3&&!battle.boss){$('battleText').textContent+=' The enemy can now be SPARED.';return setTimeout(()=>enemyTurn(false),650)}")
+          s=s.replace("<button data-a=\"run\">FLEE</button>", "<button data-a=\"run\">'+(b.mercy>=3&&!b.boss?'SPARE':'FLEE')+'</button>")
+          s=s.replace("if(Math.random()<.55+battle.mercy*.12)return endBattle(false);return enemyTurn(false)", "if(battle.mercy>=3)return spareBattle();if(Math.random()<.4+battle.mercy*.1)return escapeBattle();return enemyTurn(false)")
+          s=s.replace("btn.classList.add(ok?'good':'bad');learn(correct);setTimeout", "btn.classList.add(ok?'good':'bad');if(ok&&battle)battle.correct=(battle.correct||0)+1;learn(correct);setTimeout")
+          s=s.replace("else{window.removeEventListener('keydown',keyFn);ex.innerHTML='';renderBattle()}", "else{window.removeEventListener('keydown',keyFn);ex.innerHTML='';if(battle)battle.turn=(battle.turn||1)+1;renderBattle()}")
+          old="function winBattle(){let wasBoss=battle.boss;let gain=5+S.floor*2;S.gold+=gain;current().grid[S.y][S.x]='.';battle=null;if(wasBoss)return bossRiddle();endBattle(true)}"
+          new="""function battleReward(spared=false){let gold=6+S.floor*2+(spared?0:r(5)),item='',detail='';S.gold+=gold;let roll=r(100);if(roll<18){S.inventory.pocio=(S.inventory.pocio||0)+1;item='Potion';detail='Added to your backpack.'}else if(roll<29){S.keys++;item='Key';detail='A dungeon key.'}else if(roll<36){S.maxHp++;S.hp=Math.min(S.maxHp,S.hp+2);item='Heart Fragment';detail='Maximum health +1.'}else if(roll<41){S.atk++;item='Sharpening Stone';detail='Attack +1.'}return{gold,item,detail}}
+function rewardScreen(title,reward,extra){$('modalBox').innerHTML='<h2>'+esc(title)+'</h2><div class=\"battleText\">The enemy is gone. The room becomes quiet.</div><p>You earned <b>'+reward.gold+' gold</b>.</p>'+(reward.item?'<p>Drop: <b>'+esc(reward.item)+'</b><br>'+esc(reward.detail)+'</p>':'<p>No item dropped this time.</p>')+(extra?'<p>'+esc(extra)+'</p>':'')+'<button id=\"continueBattle\" style=\"width:100%\">CONTINUE</button>';$('continueBattle').onclick=()=>{$('modal').classList.remove('show');pending=false;lesson('The battle is over. You can keep exploring.');render()}}
+function winBattle(){let b=battle,wasBoss=b.boss,correct=b.correct||0;current().grid[S.y][S.x]='.';if(wasBoss){battle=null;return bossRiddle()}let reward=battleReward(false);battle=null;rewardScreen('Victory!',reward,'Correct Esperanto answers: '+correct+'.')}
+function spareBattle(){let correct=battle.correct||0;current().grid[S.y][S.x]='.';let reward=battleReward(true);battle=null;rewardScreen('Enemy spared',reward,'You ended the fight peacefully. Correct Esperanto answers: '+correct+'.')}
+function escapeBattle(){battle=null;$('modal').classList.remove('show');pending=false;lesson('You escaped. Escaping gives no battle reward.');render()}"""
+          if old not in s: raise SystemExit('winBattle target missing')
+          s=s.replace(old,new)
+          s=s.replace("function endBattle(win){battle=null;$('modal').classList.remove('show');pending=false;lesson(win?'You won the battle.':'You escaped the battle.');render()}", "function endBattle(win){if(win&&battle)return winBattle();return escapeBattle()}")
+          s=s.replace("During battle, choose an action. FIGHT uses a timing strike followed by a bilingual Esperanto question. SPELL tests verb conjugation in both English and Esperanto. TALK can calm some enemies. GUARD reduces damage. FLEE may fail.", "Battles last several turns. Each turn you act, answer Esperanto, then survive the enemy's dodge phase. FIGHT uses timing plus vocabulary. SPELL tests conjugation. TALK can eventually unlock SPARE. GUARD reduces damage. FLEE may fail. Winning or sparing gives gold and can drop items.")
+          p.write_text(s)
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          s=Path('aventuro.html').read_text()
+          js=re.findall(r'<script>(.*?)</script>',s,re.S)[-1]
+          Path('/tmp/aventuro.js').write_text(js)
+          subprocess.run(['node','--check','/tmp/aventuro.js'],check=True)
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add aventuro.html
+          git commit -m 'Fix battle pacing and add battle rewards'
+          git push
