@@ -1,0 +1,37 @@
+name: Vortaventuro hearing clues
+on:
+  push:
+    paths:
+      - '.github/workflows/aventuro-hearing-clues.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add contextual Esperanto hearing clues
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('aventuro.html')
+          s=p.read_text()
+          old="function hear(){$('hear').textContent='Nur silento ĉirkaŭas vin.'}"
+          new=r'''const hearClues={
+M:['Io gratas la ŝtonon ie proksime.','Vi aŭdas mallaŭtan spiradon inter la muroj.','Mallonga susuro haltas kiam vi haltas.','Io peza moviĝas ekster la lumo.','Vi aŭdas ungegojn aŭ piedojn sur ŝtono.','Mallaŭta grumblo venas tra la mallumo.','Io ŝajnas sekvi alian ritmon ol viaj paŝoj.','Subita movo rompas la silenton, poste nenio.','Vi aŭdas ion flari aŭ spiri tre proksime.','La eĥo de fremda paŝo respondas al via propra.'],
+T:['Akvo gutas pli rapide en tiu direkto.','Vi aŭdas malfortan klakon de vitro aŭ metalo.','Io likva moviĝas en malgranda ujo.','Milda tintado venas tra la mallumo.','Vi aŭdas korkon aŭ kovrilon moviĝi.','Malgranda objekto ruliĝas kaj tuj haltas.','La aero portas odoron de herboj kaj alkoholo.','Vi aŭdas unu klaran guton, poste alian.','Io delikata vibras kiam vi moviĝas.','Mallaŭta sonoro venas de io malgranda kaj malmola.'],
+G:['Malproksima metala tintado atingas vin.','Io eta falas kun akra klaketo.','Vi aŭdas plurajn malgrandajn pecojn tuŝi unu la alian.','Mallaŭta sonorado sekvas la eĥon.','Io brila ŝajne glitas sur ŝtono.','La sono similas al malgrandaj metalaj diskoj.','Vi aŭdas rapidan tintadon kaj poste silenton.','Io malmola saltetas unufoje sur la planko.','Malforta metala susuro venas el la mallumo.','La eĥo portas sonon de io valora sed malgranda.'],
+K:['Vi aŭdas metalon froti kontraŭ ŝtono.','Unu mallonga metala klako sonas proksime.','Io longa kaj maldika tintas kontraŭ la planko.','Metala objekto turniĝas kaj poste haltas.','Vi aŭdas malgrandan pecon de fero skrapi ŝtonon.','Akra tintado venas el unu direkto.','Io metala balanciĝas tre mallaŭte.','La sono memorigas pri metalo kontraŭ metalo.','Malgranda fera objekto falas kaj ne plu moviĝas.','Vi aŭdas unu precizan klakon, kvazaŭ mekanismo moviĝis.'],
+L:['Malvarma aero fluas el tiu direkto.','Vi aŭdas paperecan susuron sen vento.','Tre malforta flustro ripetas ion nekompreneblan.','La eĥo ĉi tie ŝajnas formi vortojn.','Io kiel paĝo turniĝas en la mallumo.','Vi aŭdas sekan kraketadon, kvazaŭ malnova papero moviĝus.','Mallaŭtaj voĉoj ŝajnas veni el la ŝtono mem.','La aero portas odoron de polvo kaj malnova inko.','Vi aŭdas unu vorton, sed ne sufiĉe klare por kompreni ĝin.','Susuro de multaj maldikaj folioj venas de proksime.'],
+E:['La aero antaŭ vi sonas pli vasta kaj malplena.','Longa eĥo revenas el tiu direkto.','Vi sentas malvarman trablovon kaj aŭdas profundan resonon.','Viaj paŝoj revenas al vi pli malfrue de tie.','La mallumo tie ŝajnas gluti la sonojn ĉirkaŭ ĝi.','Vi aŭdas venton kie vento ne devus ekzisti.','Profunda malplena sono venas de preter la koridoro.','La eĥo sugestas pli grandan spacon proksime.','Malforta aerfluo portas sonojn de loko pli profunda.','Io antaŭ vi ŝajnas konduki la sonon for anstataŭ resendi ĝin.']};
+function hear(){let found=[];for(let y=Math.max(1,S.y-3);y<=Math.min(H-2,S.y+3);y++)for(let x=Math.max(1,S.x-3);x<=Math.min(W-2,S.x+3);x++){let t=S.g[y][x];if(hearClues[t]){let d=Math.abs(x-S.x)+Math.abs(y-S.y);if(d>0&&d<=4)found.push({t,d})}}if(!found.length){$('hear').textContent=pick(['Nur silento ĉirkaŭas vin.','Vi aŭdas nur viajn proprajn paŝojn.','Nenio krom malproksima gutado atingas viajn orelojn.','La mallumo restas strange silenta.']);return}found.sort((a,b)=>a.d-b.d);let nearest=found[0],pool=hearClues[nearest.t];$('hear').textContent=pick(pool)}'''
+          if old not in s: raise SystemExit('hear function marker not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add aventuro.html
+          git commit -m "Give each nearby item ten randomized Esperanto clues" || exit 0
+          git push
