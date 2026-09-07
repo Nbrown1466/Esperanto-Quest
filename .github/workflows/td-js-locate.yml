@@ -1,0 +1,34 @@
+name: Locate TD JS syntax
+on:
+  push:
+    paths:
+      - '.github/workflows/td-js-locate.yml'
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate syntax error
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('tdlearn.html').read_text()
+          js=re.search(r'<script>(.*)</script></body>',s,re.S).group(1)
+          out=[]; q=None; esc=False; i=0
+          while i<len(js):
+            c=js[i]
+            if q:
+              out.append(c)
+              if esc: esc=False
+              elif c=='\\': esc=True
+              elif c==q: q=None
+            else:
+              if c in "'\"`": q=c; out.append(c)
+              elif c==';': out.append(';\n')
+              else: out.append(c)
+            i+=1
+          Path('/tmp/td-readable.js').write_text(''.join(out))
+          PY
+          node --check /tmp/td-readable.js || true
+          nl -ba /tmp/td-readable.js | tail -n 80
