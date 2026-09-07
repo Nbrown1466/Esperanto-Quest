@@ -1,0 +1,21 @@
+name: Diagnose TD JS
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-td-js.yml'
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check readable JS
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          s=Path('tdlearn.html').read_text()
+          js=re.search(r'<script>(.*)</script></body>',s,re.S).group(1)
+          js=js.replace(';',';\n')
+          Path('/tmp/td-readable.js').write_text(js)
+          PY
+          node --check /tmp/td-readable.js
