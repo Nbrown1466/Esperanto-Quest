@@ -1,0 +1,20 @@
+name: TD v19 buy XP fix
+on:
+  push:
+    paths:
+      - '.github/workflows/td-v19-buy-xp-fix.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python .github/scripts/td_v19_buy_xp.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tdlearn.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Allow players to buy defender XP"
+          git push
