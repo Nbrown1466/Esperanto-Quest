@@ -1,0 +1,32 @@
+name: Vortaventuro keyboard controls
+on:
+  push:
+    paths:
+      - '.github/workflows/aventuro-keyboard-controls.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add keyboard movement
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('aventuro.html')
+          s=p.read_text()
+          marker='newRun();\n</script></body></html>'
+          code="""window.addEventListener('keydown',e=>{\n  if(!S||battle||document.getElementById('modal').classList.contains('show'))return;\n  const k=e.key.toLowerCase();\n  const dirs={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]};\n  if(dirs[k]){e.preventDefault();move(...dirs[k]);}\n});\nnewRun();\n</script></body></html>"""
+          if marker not in s:
+              raise SystemExit('end marker not found')
+          s=s.replace(marker,code,1)
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add aventuro.html
+          git commit -m "Enable WASD and arrow movement in Vortaventuro" || exit 0
+          git push
