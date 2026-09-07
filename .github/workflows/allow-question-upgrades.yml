@@ -1,0 +1,37 @@
+name: Allow question-pause upgrades
+on:
+  push:
+    paths:
+      - '.github/workflows/allow-question-upgrades.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable upgrades during question pauses
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('tdlearn.html')
+          s=p.read_text()
+          old='<div id="feedback" class="small" style="margin-top:7px;font-weight:850"></div></div>'
+          new='<div id="feedback" class="small" style="margin-top:7px;font-weight:850"></div><button id="questionUpgrade" style="width:100%;margin-top:8px">Upgrade selected defender while paused</button><div class="small" style="margin-top:6px">You can tap any placed defender on the map, change targeting, and buy upgrades before answering.</div></div>'
+          if old not in s:
+              raise SystemExit('question panel pattern not found')
+          s=s.replace(old,new,1)
+          marker="$('upbtn').onclick=upgrades;"
+          inject="$ ('upbtn')" if False else ""
+          replacement="$('upbtn').onclick=upgrades;$('questionUpgrade').onclick=()=>{if(selTower<0){toast('Tap a placed defender first');return}upgrades();$('upanel').scrollIntoView({behavior:'smooth',block:'nearest'})};"
+          if marker not in s:
+              raise SystemExit('upgrade handler marker not found')
+          s=s.replace(marker,replacement,1)
+          p.write_text(s)
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tdlearn.html
+          git commit -m "Allow upgrades during Esperanto question pauses"
+          git push
