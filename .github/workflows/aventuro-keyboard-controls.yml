@@ -30,3 +30,4 @@ jobs:
           git add aventuro.html
           git commit -m "Enable WASD and arrow movement in Vortaventuro" || exit 0
           git push
+# trigger 2
