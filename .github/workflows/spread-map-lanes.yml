@@ -1,0 +1,34 @@
+name: Spread map lanes
+on:
+  push:
+    paths:
+      - '.github/workflows/spread-map-lanes.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reduce medium and hard path overlap
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tdlearn.html')
+          s=p.read_text()
+          old_r="river:{short:'Rivers',lives:100,coins:470,hp:1.18,speed:1.08,extra:2,g:'#76c985',g2:'#62b56f',road:'#d6b377',edge:'#9b7948',info:'Three long winding lanes weave through shared crossings. Different waves favor different entrances.',lanes:[[[0,95],[110,95],[190,155],[170,245],[260,300],[360,255],[455,165],[545,210],[625,315],[725,285],[790,185],[900,185]],[[0,490],[120,490],[205,430],[175,350],[270,295],[375,335],[470,425],[565,370],[635,275],[725,325],[805,410],[900,410]],[[900,85],[805,85],[735,145],[755,230],[670,300],[565,265],[475,185],[385,225],[300,330],[195,300],[115,235],[0,235]]]}"
+          new_r="river:{short:'Rivers',lives:100,coins:470,hp:1.18,speed:1.08,extra:2,g:'#76c985',g2:'#62b56f',road:'#d6b377',edge:'#9b7948',info:'Three winding lanes use separate upper, middle, and lower corridors with only a few deliberate crossings.',lanes:[[[0,88],[120,88],[205,128],[250,205],[330,170],[420,105],[520,120],[600,190],[690,150],[780,115],[900,130]],[[0,285],[110,285],[195,250],[285,275],[370,335],[470,315],[560,250],[655,275],[740,330],[825,300],[900,285]],[[900,500],[790,500],[700,455],[625,390],[535,425],[445,485],[355,455],[270,385],[180,410],[95,470],[0,460]]]}"
+          old_n="night:{short:'Night',lives:100,coins:420,hp:1.4,speed:1.15,extra:4,g:'#405466',g2:'#34495b',road:'#9a826b',edge:'#675341',info:'Four intertwined entrances. All four appear across the early cycle and converge into dangerous late-wave crossings.',lanes:[[[0,80],[95,80],[175,145],[150,230],[240,300],[345,250],[430,155],[530,205],[620,315],[720,275],[795,165],[900,165]],[[0,520],[105,520],[190,455],[165,370],[255,305],[365,350],[455,445],[560,385],[640,285],[735,335],[810,430],[900,430]],[[900,75],[805,75],[730,145],[755,235],[665,305],[555,260],[465,165],[365,220],[285,330],[180,290],[100,225],[0,225]],[[900,530],[800,530],[720,465],[745,375],[650,310],[545,355],[455,455],[350,395],[270,300],[170,345],[95,430],[0,430]] ]}"
+          new_n="night:{short:'Night',lives:100,coins:420,hp:1.4,speed:1.15,extra:4,g:'#405466',g2:'#34495b',road:'#9a826b',edge:'#675341',info:'Four distinct corridors stay readable even when all entrances are active; crossings are limited to intentional choke points.',lanes:[[[0,70],[120,70],[220,105],[300,155],[400,130],[500,80],[610,95],[710,145],[810,115],[900,105]],[[0,220],[100,220],[185,185],[270,220],[355,280],[455,260],[545,205],[640,225],[735,280],[825,245],[900,230]],[[900,365],[805,365],[715,330],[625,360],[535,420],[435,400],[345,345],[255,365],[170,420],[85,390],[0,380]],[[900,525],[790,525],[700,485],[615,445],[525,470],[430,520],[335,495],[250,440],[165,465],[85,515],[0,505]] ]}"
+          if old_r not in s or old_n not in s:
+              raise SystemExit('expected map definitions not found')
+          s=s.replace(old_r,new_r).replace(old_n,new_n)
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'Esperanto Quest Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add tdlearn.html
+          git commit -m 'Reduce medium and hard map path overlap'
+          git push
