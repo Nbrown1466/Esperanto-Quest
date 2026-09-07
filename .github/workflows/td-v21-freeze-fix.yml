@@ -1,0 +1,69 @@
+name: TD v21 freeze fix
+on:
+  push:
+    paths:
+      - '.github/workflows/td-v21-freeze-fix.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix multiplayer freezes and cap late-wave load
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tdlearn.html')
+          s=p.read_text()
+
+          # start() and gameEnd() still call mpSync after the shared-board refactor.
+          marker="function mpBroadcast(){if(mpMode&&mpHost)mpSend(mpSnapshot())}"
+          repl=marker+"function mpSync(){if(mpMode&&mpHost)mpBroadcast()}"
+          if marker in s and "function mpSync()" not in s:
+              s=s.replace(marker,repl,1)
+
+          # Reduce snapshot pressure a bit more on long waves.
+          s=s.replace("n-mpLastSync>250","n-mpLastSync>400",1)
+
+          # Put a hard safety ceiling on live balloons so layered late-wave splits cannot explode exponentially.
+          if "const MAX_ENEMIES=" not in s:
+              s=s.replace("const CHILD=", "const MAX_ENEMIES=220;const CHILD=", 1)
+
+          old="enemies=enemies.filter(e=>e.hp>0);enemies.push(...born)}"
+          new="enemies=enemies.filter(e=>e.hp>0);if(enemies.length+born.length>MAX_ENEMIES)born=born.slice(0,Math.max(0,MAX_ENEMIES-enemies.length));enemies.push(...born)}"
+          if old not in s:
+              raise SystemExit('kill tail not found')
+          s=s.replace(old,new,1)
+
+          # Also cap direct wave spawning if an unusually dense wave is already on screen.
+          old="function spawn(s){let b=B[s.type],tag=b[4]||'',hp=b[0]*map.hp*(1+Math.max(0,wave-12)*.025);enemies.push("
+          new="function spawn(s){if(enemies.length>=MAX_ENEMIES)return;let b=B[s.type],tag=b[4]||'',hp=b[0]*map.hp*(1+Math.max(0,wave-12)*.025);enemies.push("
+          if old not in s:
+              raise SystemExit('spawn function not found')
+          s=s.replace(old,new,1)
+
+          # Fix the guest Buy XP command name/field mismatch discovered during the audit.
+          s=s.replace("m.action==='buyXp')applyBuyXp(+m.index,+m.xp,+m.cost,true)","m.action==='buyxp')applyBuyXp(+m.index,+m.amount,+m.cost,true)",1)
+
+          p.write_text(s)
+          PY
+      - name: Check JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, subprocess, tempfile
+          s=Path('tdlearn.html').read_text()
+          scripts=re.findall(r'<script(?:[^>]*)>(.*?)</script>',s,re.S)
+          js='\n'.join(x for x in scripts if x.strip())
+          f=tempfile.NamedTemporaryFile('w',suffix='.js',delete=False)
+          f.write(js); f.close()
+          subprocess.run(['node','--check',f.name],check=True)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tdlearn.html
+          git commit -m "Prevent multiplayer late-wave freezes" || exit 0
+          git push
