@@ -1,0 +1,79 @@
+name: TD v16 coop balance
+on:
+  push:
+    paths: ['.github/workflows/td-v16-coop-balance.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebalance game and convert multiplayer to co-op
+        shell: python
+        run: |
+          from pathlib import Path
+          import re, subprocess
+          p=Path('tdlearn.html')
+          s=p.read_text()
+
+          # Cooperative UI instead of versus battle.
+          s=s.replace('<h3>Multiplayer Battle</h3><div class="small">Host a 1v1 room or join with a code. Each player defends their own map and can send attack balloons to the other player.</div>', '<h3>Co-op Multiplayer</h3><div class="small">Host a room or join with a code. You and your teammate defend against the same balloon waves together. If either player is defeated, the co-op run ends.</div>')
+          s=s.replace('Opponent lives','Teammate lives').replace('Opponent wave','Teammate wave')
+          s=re.sub(r'<b style="display:block;margin:8px 0 5px">Send balloons</b><div style="display:grid;grid-template-columns:repeat\(3,1fr\);gap:6px">.*?</div><div class="small" style="margin-top:6px">Sent balloons enter your opponent’s next available spawn queue\. Questions still pause only your own board\.</div>', '<div class="small" style="margin-top:8px"><b>Co-op:</b> Both players get the same natural wave progression. One player starting a wave starts it for the teammate too. Each player can build and upgrade their own defenders, and either board falling ends the run.</div>', s, flags=re.S)
+          s=s.replace("Connected — battle ready","Connected — co-op ready")
+
+          # Easier map economy and scaling.
+          s=s.replace("meadow:{short:'Meadow',lives:100,coins:520,hp:1,speed:1,extra:0", "meadow:{short:'Meadow',lives:100,coins:650,hp:.9,speed:.92,extra:0")
+          s=s.replace("river:{short:'Rivers',lives:100,coins:470,hp:1.18,speed:1.08,extra:2", "river:{short:'Rivers',lives:100,coins:600,hp:1,speed:.98,extra:1")
+          s=s.replace("night:{short:'Night',lives:100,coins:420,hp:1.4,speed:1.15,extra:4", "night:{short:'Night',lives:100,coins:560,hp:1.12,speed:1.04,extra:2")
+
+          # Stronger defenders, tuned against this game's balloon layers rather than copied proprietary stats.
+          old="const T={dart:{name:'Dart Ranger',cost:120,range:122,rate:.7,damage:1.15,color:'#4476d8'},rapid:{name:'Arc Caster',cost:200,range:102,rate:.29,damage:.8,color:'#7d52ce'},splash:{name:'Bombardier',cost:300,range:138,rate:1.1,damage:2,splash:48,color:'#e08c31'},frost:{name:'Frost Warden',cost:260,range:118,rate:.82,damage:1.05,color:'#4ea1c9',slow:.72},needle:{name:'Needle Scout',cost:240,range:168,rate:.62,damage:1.35,color:'#3f9a68',pierce:2},sun:{name:'Sun Adept',cost:330,range:112,rate:.52,damage:1.8,color:'#d7a62e'}};"
+          new="const T={dart:{name:'Dart Ranger',cost:120,range:132,rate:.6,damage:2,color:'#4476d8'},rapid:{name:'Arc Caster',cost:200,range:112,rate:.24,damage:1.25,color:'#7d52ce'},splash:{name:'Bombardier',cost:300,range:148,rate:.9,damage:3.5,splash:54,color:'#e08c31'},frost:{name:'Frost Warden',cost:260,range:128,rate:.7,damage:1.6,color:'#4ea1c9',slow:.68},needle:{name:'Needle Scout',cost:240,range:178,rate:.5,damage:2.3,color:'#3f9a68',pierce:3},sun:{name:'Sun Adept',cost:330,range:122,rate:.42,damage:3,color:'#d7a62e'}};"
+          if old not in s: raise SystemExit('tower stats pattern not found')
+          s=s.replace(old,new)
+
+          # Layer health: old values double-counted durability because children also spawned with full HP.
+          oldb="const B={red:[1,1,'#ef4d5f',11],blue:[2,1.12,'#4284ef',12],green:[3,1.24,'#48c36b',13],yellow:[4,1.48,'#f1cf38',12,'fast'],pink:[5,1.82,'#ef75b8',11,'fast'],black:[10,1.2,'#31343a',13,'splash'],white:[10,1.26,'#f1f3f6',13,'slow'],camo:[4,1.28,'#4fa85c',13,'camo'],camoPink:[7,1.9,'#e876b6',11,'camoFast'],lead:[20,.78,'#7b858e',15,'armor'],armored:[34,.9,'#68737e',16,'heavy'],rainbow:[30,1.22,'#7b4fd6',16,'rainbow'],ceramic:[62,1.02,'#c98b4c',18,'ceramic'],blimp:[210,.6,'#4e6b89',25,'blimp'],fastBlimp:[170,.82,'#5e7897',23,'blimpFast'],fortress:[420,.46,'#394e67',29,'fortress']};"
+          newb="const B={red:[1,1,'#ef4d5f',11],blue:[1,1.12,'#4284ef',12],green:[1,1.24,'#48c36b',13],yellow:[1,1.48,'#f1cf38',12,'fast'],pink:[1,1.82,'#ef75b8',11,'fast'],black:[2,1.2,'#31343a',13,'splash'],white:[2,1.26,'#f1f3f6',13,'slow'],camo:[1,1.28,'#4fa85c',13,'camo'],camoPink:[1,1.9,'#e876b6',11,'camoFast'],lead:[4,.78,'#7b858e',15,'armor'],armored:[6,.9,'#68737e',16,'heavy'],rainbow:[3,1.22,'#7b4fd6',16,'rainbow'],ceramic:[18,1.02,'#c98b4c',18,'ceramic'],blimp:[95,.6,'#4e6b89',25,'blimp'],fastBlimp:[75,.82,'#5e7897',23,'blimpFast'],fortress:[180,.46,'#394e67',29,'fortress']};"
+          if oldb not in s: raise SystemExit('balloon stats pattern not found')
+          s=s.replace(oldb,newb)
+
+          # All towers can chip ceramics; ceramic upgrade removes the penalty instead of being a hard gate.
+          s=s.replace("function can(t,e){if(e.tag.includes('camo')&&!t.camo)return false;if(e.tag==='ceramic'&&!t.ceramicHit)return false;return true}", "function can(t,e){if(e.tag.includes('camo')&&!t.camo)return false;return true}")
+          s=s.replace("else if((e.tag==='armor'||e.tag==='ceramic'||e.tag==='fortress')&&!t.armorBreak)dmg*=.65;", "else if((e.tag==='armor'||e.tag==='fortress')&&!t.armorBreak)dmg*=.72;if(e.tag==='ceramic'&&!t.ceramicHit)dmg*=.6;")
+
+          # Faster XP so upgrades arrive before special balloons become overwhelming.
+          s=s.replace("e.hp-=dmg;t.xp+=.12;", "e.hp-=dmg;t.xp+=.22;")
+
+          # Gentler leak damage.
+          s=re.sub(r"function leakDamage\(e\)\{let x=\{.*?\};return x\[e\.type\]\|\|1\}", "function leakDamage(e){let x={red:1,blue:2,green:3,yellow:4,pink:5,black:8,white:8,camo:4,camoPink:7,lead:10,armored:14,rainbow:12,ceramic:20,blimp:40,fastBlimp:30,fortress:65};return x[e.type]||1}", s)
+
+          # Co-op networking: remove attacks, synchronize wave starts, and treat teammate defeat as team defeat.
+          s=s.replace("if(oppLives<=0&&!mpWon){mpWon=1;toast('You win the multiplayer battle!');sfx('ok')}}else if(m.type==='attack'){let L=[...Array(lanes.length).keys()];for(let i=0;i<(m.count||1);i++)queue.push({type:m.balloon,lane:L[i%L.length],rush:1,pvp:1});spawning=true;toast('Opponent sent '+(m.count||1)+' '+m.balloon+' balloons');sfx('alarm')}else if(m.type==='start'&&!started){start()}", "if(oppLives<=0&&!mpWon){mpWon=1;toast('Co-op run ended: your teammate was defeated');if(!over)gameEnd()}}else if(m.type==='start'&&!started){start()}else if(m.type==='waveStart'&&started&&!qopen&&!over&&m.wave===wave+1){start()}")
+          s=re.sub(r"function sendMpBalloon\(type,cost,count\)\{.*?\}function au\(\)", "function sendMpBalloon(){toast('Co-op mode: balloon sending is disabled')}function au()", s, flags=re.S)
+          s=s.replace("toast(map.short+' · Wave '+wave);hud();mpSync()", "toast(map.short+' · Wave '+wave);hud();mpSync();if(mpMode)mpSend({type:'waveStart',wave:wave})")
+          s=s.replace("document.querySelectorAll('.sendBalloon').forEach(b=>b.onclick=()=>sendMpBalloon(b.dataset.send,+b.dataset.cost,+b.dataset.count));", "document.querySelectorAll('.sendBalloon').forEach(b=>b.remove());")
+
+          # Update shop descriptions to reflect stronger roles.
+          s=s.replace('Balanced, unlocks camo sight','Strong all-round damage, unlocks camo sight')
+          s=s.replace('Fast, chains later','Very fast attacks, chains later')
+          s=s.replace('Splash, armor breaker later','Heavy splash damage, armor breaker later')
+          s=s.replace('Slows groups, needs upgrades for camo and ceramics','Slows groups and chips ceramics; upgrades improve both')
+          s=s.replace('Long range, piercing precision shots','Long range, high damage, piercing precision shots')
+          s=s.replace('Short range magic burst with strong late upgrades','Powerful magic burst with strong late upgrades')
+          s=s.replace('Ceramic shells require a ceramic-breaking upgrade before a defender can damage them.', 'Ceramic shells take reduced damage until a defender buys its ceramic-breaking upgrade.')
+
+          p.write_text(s)
+          m=re.search(r'<script>.*?<\/script>',s,re.S)
+          scripts=re.findall(r'<script>(.*?)</script>',s,re.S)
+          Path('/tmp/td.js').write_text(scripts[-1])
+          subprocess.run(['node','--check','/tmp/td.js'],check=True)
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tdlearn.html
+          git diff --cached --quiet || git commit -m "Rebalance TD and switch multiplayer to co-op"
+          git push
