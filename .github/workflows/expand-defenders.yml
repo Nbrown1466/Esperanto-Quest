@@ -1,0 +1,75 @@
+name: Expand defenders
+on:
+  push:
+    paths:
+      - '.github/workflows/expand-defenders.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch tower defense
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('tdlearn.html')
+          s=p.read_text()
+
+          # Start every map at 100 lives.
+          s=re.sub(r"lives:\d+", "lives:100", s)
+
+          # Add extra shop defenders if not already present.
+          marker='</div><div class="actions"'
+          if 'data-type="frost"' not in s and marker in s:
+              extra='''<button class="tower" data-type="frost"><span class="ico" style="background:#4ea1c9">❄</span><span><b>Frost Warden</b><span class="small">Slows groups, needs upgrades for camo and ceramics</span></span><b>260</b></button><button class="tower" data-type="needle"><span class="ico" style="background:#3f9a68">➶</span><span><b>Needle Scout</b><span class="small">Long range, piercing precision shots</span></span><b>240</b></button><button class="tower" data-type="sun"><span class="ico" style="background:#d7a62e">☼</span><span><b>Sun Adept</b><span class="small">Short range magic burst with strong late upgrades</span></span><b>330</b></button>'''
+              s=s.replace(marker, extra+marker, 1)
+
+          # Extend tower stats.
+          m=re.search(r"const T=\{.*?\};const U=",s)
+          if m and 'frost:{name:' not in m.group(0):
+              old=m.group(0)
+              body=old[:-9]
+              body=body[:-1]+",frost:{name:'Frost Warden',cost:260,range:118,rate:.82,damage:1.05,color:'#4ea1c9',slow:.72},needle:{name:'Needle Scout',cost:240,range:168,rate:.62,damage:1.35,color:'#3f9a68',pierce:2},sun:{name:'Sun Adept',cost:330,range:112,rate:.52,damage:1.8,color:'#d7a62e'};const U="
+              s=s[:m.start()]+body+s[m.end():]
+
+          # Extend upgrade trees.
+          um=re.search(r"const U=\{(.*?)\};const B=",s,re.S)
+          if um and 'frost:[' not in um.group(1):
+              ubody=um.group(1)
+              add=",frost:[['chill','Deep Chill',8,110,'Stronger slow',t=>t.slow=.6],['range','Cold Front',18,145,'+28 range',t=>t.range+=28],['camo','Frost Sight',27,170,'Detect camo balloons',t=>t.camo=1],['ceramic','Brittle Core',36,225,'Can damage ceramic shells',t=>t.ceramicHit=1],['storm','Snowstorm',48,300,'Splash slow and +35% damage',t=>{t.splash=55;t.damage*=1.35}],['zero','Absolute Chill',72,520,'50% faster +60% damage',t=>{t.rate*=.5;t.damage*=1.6}]],needle:[['tips','Tempered Needles',8,95,'+35% damage',t=>t.damage*=1.35],['scope','Eagle Scope',18,135,'+34 range',t=>t.range+=34],['camo','Pattern Reader',26,160,'Detect camo balloons',t=>t.camo=1],['ceramic','Diamond Needle',35,215,'Can damage ceramic shells',t=>t.ceramicHit=1],['pierce','Triple Pierce',46,285,'Pierce up to 4 targets',t=>t.pierce=4],['sniper','Master Scout',70,480,'+90% damage',t=>t.damage*=1.9]],sun:[['focus','Focused Light',8,120,'+30% damage',t=>t.damage*=1.3],['reach','Solar Reach',18,150,'+25 range',t=>t.range+=25],['camo','Radiant Sight',28,180,'Detect camo balloons',t=>t.camo=1],['ceramic','Solar Fracture',37,235,'Can damage ceramic shells',t=>t.ceramicHit=1],['burst','Sunburst',48,320,'Area burst damage',t=>t.splash=62],['nova','Nova Core',74,560,'45% faster +75% damage',t=>{t.rate*=.55;t.damage*=1.75}]]"
+              s=s[:um.start()]+"const U={"+ubody+add+"};const B="+s[um.end():]
+
+          # Different life loss per balloon type.
+          if 'function leakDamage(' not in s:
+              insert="function leakDamage(e){let x={red:1,blue:2,green:3,yellow:4,pink:5,black:11,white:11,camo:4,camoPink:7,lead:23,armored:35,rainbow:47,ceramic:85,blimp:150,fastBlimp:120,fortress:300};return x[e.type]||1}"
+              idx=s.find('function tick(')
+              if idx!=-1:s=s[:idx]+insert+s[idx:]
+          s=re.sub(r"lives-=e\.tag\.includes\('blimp'\)\|\|e\.tag==='fortress'\?3:e\.tag==='ceramic'\?2:1", "lives-=leakDamage(e)", s)
+          s=re.sub(r"lives-=e\.leak\|\|1", "lives-=leakDamage(e)", s)
+
+          # Let piercing defenders hit extra nearby balloons.
+          if "if(t.pierce)" not in s:
+              s=s.replace("if(t.chain){", "if(t.pierce&&t.pierce>1){let extras=enemies.filter(o=>o!==e&&can(t,o)).filter(o=>{let q=point(o.lane,o.d);return Math.hypot(q.x-p.x,q.y-p.y)<80}).slice(0,t.pierce-1);extras.forEach(o=>hit(t,o,t.damage*.85,now))}if(t.chain){")
+
+          # Record firing time for recoil animation.
+          s=s.replace("function fire(t,e,now){let p=point(e.lane,e.d);", "function fire(t,e,now){t.lastShot=now;let p=point(e.lane,e.d);")
+
+          # Replace defender drawing with aiming + recoil animation while preserving range logic elsewhere.
+          dm=re.search(r"function drawTower\(t\)\{.*?\}function drawBalloon",s,re.S)
+          if dm:
+              new="""function drawTower(t){cx.save();cx.translate(t.x,t.y);let tar=target(t),ang=0;if(tar){let pp=point(tar.lane,tar.d);ang=Math.atan2(pp.y-t.y,pp.x-t.x)}let recoil=t.lastShot?Math.max(0,1-(performance.now()-t.lastShot)/140):0;cx.fillStyle='#273545';cx.beginPath();cx.ellipse(0,15,24,10,0,0,7);cx.fill();let body=t.type==='dart'?'#bd7b48':t.type==='rapid'?'#7053a8':t.type==='splash'?'#c48740':t.type==='frost'?'#74bcd8':t.type==='needle'?'#4f9d70':'#d1a33a';cx.fillStyle=body;cx.beginPath();cx.arc(0,-1,17,0,7);cx.fill();cx.fillStyle='#efb97d';cx.beginPath();cx.arc(0,-17,13,0,7);cx.fill();cx.fillStyle='#202832';cx.beginPath();cx.arc(-4,-20,2,0,7);cx.arc(4,-20,2,0,7);cx.fill();if(t.camo){cx.strokeStyle='#58e08a';cx.lineWidth=2;cx.beginPath();cx.arc(0,-17,17,0,7);cx.stroke()}cx.save();cx.rotate(ang);cx.translate(-recoil*7,0);cx.strokeStyle=t.color;cx.fillStyle=t.color;cx.lineWidth=5;if(t.type==='splash'){cx.fillRect(7,-8,35,16);cx.fillStyle='#30343a';cx.fillRect(33,-5,13,10)}else if(t.type==='frost'){cx.beginPath();cx.moveTo(8,0);cx.lineTo(35,0);cx.stroke();cx.beginPath();cx.arc(39,0,6,0,7);cx.stroke()}else if(t.type==='sun'){cx.beginPath();cx.arc(32,0,8,0,7);cx.fill();cx.strokeStyle='#fff8b5';for(let a=0;a<6.3;a+=1.05){cx.beginPath();cx.moveTo(32+Math.cos(a)*10,Math.sin(a)*10);cx.lineTo(32+Math.cos(a)*16,Math.sin(a)*16);cx.stroke()}}else{cx.fillRect(9,-4,31,8);if(t.type==='needle'){cx.beginPath();cx.moveTo(40,-6);cx.lineTo(51,0);cx.lineTo(40,6);cx.fill()}}cx.restore();cx.restore()}function drawBalloon"""
+              s=s[:dm.start()]+new+s[dm.end():]
+
+          # Make new defenders default closest and preserve special properties.
+          s=s.replace("targetMode:'closest'}", "targetMode:'closest',lastShot:0}")
+
+          p.write_text(s)
+          PY
+          git config user.name "Esperanto Quest Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add tdlearn.html
+          git commit -m "Restore aiming animation add 100 lives and more defenders" || exit 0
+          git push
