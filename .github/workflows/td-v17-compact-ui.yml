@@ -1,0 +1,79 @@
+name: TD v17 compact UI
+on:
+  push:
+    paths:
+      - '.github/workflows/td-v17-compact-ui.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make compact button-first interface
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('tdlearn.html')
+          s=p.read_text()
+
+          # Compact battle-style side rail: tabs stay visible and only one utility panel is shown at once.
+          css_add='''.side{position:relative;display:block;max-height:none!important;overflow:visible!important;padding-right:0!important}.sideTabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:7px;position:sticky;top:0;z-index:8;background:#2f6f3e;padding:5px;border-radius:12px}.sideTab{padding:8px 4px!important;font-size:.76rem;box-shadow:0 2px 0 #5f3b17!important}.sideTab.active{background:linear-gradient(#fff59b,#ffc83d);outline:3px solid #fff7c8}.utilityPanel{display:none}.utilityPanel.active{display:block}.shop{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.tower{grid-template-columns:34px 1fr!important;padding:7px!important;min-height:58px}.tower>.ico{width:32px;height:32px;border-radius:9px}.tower>span:nth-child(2){display:block}.tower>span:nth-child(2)>.small{display:none}.tower>b:last-child{grid-column:2;font-size:.78rem;margin-top:-14px;justify-self:end}.panel h3{margin:2px 0 7px}.panel>p.small,.panel>div>.chip,#mapInfo{display:none}.upanel{max-height:505px;overflow:auto}.upg{padding:7px 8px!important;margin-top:5px!important}.targeting{margin:6px 0;padding:7px}.targetBtn{padding:7px 3px!important}.quickGame{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:7px}.quickGame button{padding:8px 5px!important}.stats{gap:5px;margin:6px 0}.stat{min-width:68px;padding:5px}.stat b{font-size:1rem}.controls{gap:5px}.controls button,.controls select{padding:8px 9px}.questionDock{position:relative;z-index:12}.questionDock.show{display:block!important}.mpCompactText{display:none}@media(max-width:900px){.side{display:block!important}.sideTabs{position:relative}.utilityPanel.active{display:block}.shop{grid-template-columns:repeat(3,minmax(0,1fr))}.upanel{max-height:none}}@media(max-width:600px){.shop{grid-template-columns:repeat(2,minmax(0,1fr))}.sideTabs{grid-template-columns:repeat(4,1fr)}.sideTab{font-size:.68rem;padding:7px 2px!important}}'''
+          s=s.replace('</style>',css_add+'</style>')
+
+          old='<div class="side"><div id="question" class="panel q">'
+          new='''<div class="side"><div class="sideTabs"><button class="sideTab active" data-tab="shopPanel">Defenders</button><button class="sideTab" data-tab="upanel">Upgrade</button><button class="sideTab" data-tab="mpPanel">Co-op</button><button class="sideTab" data-tab="scoresPanel">Scores</button></div><div class="quickGame"><button id="quickPlay">▶ Play</button><button id="quickPause">Ⅱ Pause</button><button id="quickNew">↻ New</button></div><div id="question" class="panel q questionDock">'''
+          if old not in s: raise SystemExit('side start not found')
+          s=s.replace(old,new,1)
+
+          s=s.replace('<div class="panel" id="mpPanel"><h3>Co-op Multiplayer</h3>','<div class="panel utilityPanel" id="mpPanel"><h3>Co-op Multiplayer</h3>',1)
+          s=s.replace('<div class="panel"><h3>Defender shop</h3>','<div class="panel utilityPanel active" id="shopPanel"><h3>Defenders</h3>',1)
+          s=s.replace('<div id="upanel" class="panel upanel">','<div id="upanel" class="panel upanel utilityPanel">',1)
+          s=s.replace('<div class="panel"><h3>High scores</h3><div id="scorelist"></div></div>','<div class="panel utilityPanel" id="scoresPanel"><h3>High scores</h3><div id="scorelist"></div></div>',1)
+
+          # Shorten co-op text to keep the panel compact.
+          s=s.replace('Host a room or join with a code. You and your teammate defend against the same balloon waves together. If either player is defeated, the co-op run ends.','Host or join a co-op room with a 6-character code.',1)
+          s=s.replace('<div class="small" style="margin-top:8px"><b>Co-op:</b> Both players get the same natural wave progression. One player starting a wave starts it for the teammate too. Each player can build and upgrade their own defenders, and either board falling ends the run.</div>','<div class="small" style="margin-top:8px"><b>Shared waves.</b> Build on your own board; either board falling ends the run.</div>',1)
+
+          # Add tab controller before upgrade function.
+          marker='function upgrades(){'
+          inject="""function showSideTab(id){document.querySelectorAll('.utilityPanel').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.sideTab').forEach(x=>x.classList.toggle('active',x.dataset.tab===id));}document.querySelectorAll('.sideTab').forEach(b=>b.onclick=()=>showSideTab(b.dataset.tab));function upgrades(){"""
+          if marker not in s: raise SystemExit('upgrades marker not found')
+          s=s.replace(marker,inject,1)
+
+          # Selecting an existing defender should bring its upgrade controls immediately into view.
+          old_click="selTower=f;$('upbtn').disabled=f<0;upgrades();hud()"
+          new_click="selTower=f;$('upbtn').disabled=f<0;if(f>=0)showSideTab('upanel');upgrades();hud()"
+          if old_click not in s: raise SystemExit('tower select marker not found')
+          s=s.replace(old_click,new_click,1)
+
+          # Upgrade buttons jump to upgrade tab rather than relying on scrolling.
+          s=s.replace("$('upbtn').onclick=upgrades;","$('upbtn').onclick=()=>{showSideTab('upanel');upgrades()};",1)
+          s=s.replace("$('questionUpgrade').onclick=()=>{if(selTower<0){toast('Tap a placed defender first');return}upgrades();$('upanel').scrollIntoView({behavior:'smooth',block:'nearest'})}","$('questionUpgrade').onclick=()=>{if(selTower<0){toast('Tap a placed defender first');return}showSideTab('upanel');upgrades()}",1)
+
+          # Quick always-visible controls mirror the top controls.
+          marker2="$ ('play')" # just to keep source string below readable
+          playhook="$('play').onclick=()=>{if(!started&&!over){if(mpMode)mpSend({type:'start'});start()}};"
+          if playhook not in s: raise SystemExit('play hook not found')
+          s=s.replace(playhook,playhook+"$('quickPlay').onclick=()=>$('play').click();$('quickPause').onclick=()=>$('pauseBtn').click();$('quickNew').onclick=()=>$('new').click();",1)
+
+          # Reset opens defenders tab and keeps quick labels synchronized.
+          s=s.replace("$('mapInfo').textContent=map.info+' Set up defenders before pressing Play.';","$('mapInfo').textContent=map.info+' Set up defenders before pressing Play.';showSideTab('shopPanel');",1)
+          s=s.replace("$('pauseBtn').textContent=manualPause?'▶ Resume':'Ⅱ Pause';","$('pauseBtn').textContent=manualPause?'▶ Resume':'Ⅱ Pause';$('quickPause').textContent=manualPause?'▶ Resume':'Ⅱ Pause';",1)
+          s=s.replace("$('pauseBtn').textContent='Ⅱ Pause';$('upbtn').disabled=true;","$('pauseBtn').textContent='Ⅱ Pause';$('quickPause').textContent='Ⅱ Pause';$('upbtn').disabled=true;",1)
+
+          # Syntax check extracted inline script.
+          p.write_text(s)
+          m=re.search(r'<script>(.*)</script></body>',s,re.S)
+          if not m: raise SystemExit('inline script missing')
+          Path('/tmp/td.js').write_text(m.group(1))
+          PY
+          node --check /tmp/td.js
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tdlearn.html
+          git commit -m 'Make tower defense UI compact and button driven'
+          git push
