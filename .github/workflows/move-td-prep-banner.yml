@@ -1,0 +1,33 @@
+name: Move TD prep banner
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/move-td-prep-banner.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move setup notice out of playfield
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('tdlearn.html')
+          s=p.read_text()
+          old='<div id="prep" style="position:absolute;inset:0;display:grid;place-items:center;background:#173c2488;pointer-events:none"><div style="background:#fff3b5;border:4px solid #6f471f;border-radius:18px;padding:16px 22px;text-align:center;box-shadow:0 5px 0 #4f3216"><b style="font-size:1.25rem">SET UP YOUR DEFENDERS</b><br><span class="small">Place characters first, then press Play to begin Wave 1.</span></div></div>'
+          new='<div id="prep" style="position:absolute;top:10px;right:10px;display:block;pointer-events:none;max-width:260px"><div style="background:#fff3b5e8;border:3px solid #6f471f;border-radius:14px;padding:9px 12px;text-align:center;box-shadow:0 3px 0 #4f3216"><b style="font-size:.95rem">SET UP DEFENDERS</b><br><span class="small">Place defenders, then press Play.</span></div></div>'
+          if old not in s:
+              raise SystemExit('prep banner pattern not found')
+          s=s.replace(old,new)
+          s=s.replace("$('prep').style.display='grid'", "$('prep').style.display='block'")
+          p.write_text(s)
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tdlearn.html
+          git commit -m "Move defender setup notice out of playfield"
+          git push
