@@ -1,0 +1,63 @@
+name: Repair Vortaventuro interactions
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-aventuro-interactions.yml'
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore rich game and repair interaction logic
+        run: |
+          git show c2b2dfb7d5e04313f6eb3d8498f71ec8d268f351:aventuro.html > aventuro.html
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('aventuro.html')
+          s=p.read_text()
+          old_move="""function move(dx,dy){if(battle)return;let x=S.x+dx,y=S.y+dy,t=S.g[y]?.[x];if(!t||t=='#'){guide('A wall blocks the way.');hear();return render()}S.x=x;S.y=y;if(t=='M')startBattle();else if(t=='G'){S.g[y][x]='.';let z=5+r(8);S.gold+=z;guide('You find a small cache. '+z+' gold added.')}else if(t=='K'){S.g[y][x]='.';S.keys++;guide('You find a cold iron key.')}else if(t=='L'){S.g[y][x]='.';discoverLore()}else if(t=='T'){S.g[y][x]='.';let d=Math.max(1,2-S.def);S.hp-=d;guide('A hidden mechanism snaps shut. You lose '+d+' health.');if(S.hp<=0)return die()}else if(t=='E'){S.floor++;S.x=S.y=1;S.g=grid();S.seen={};S.hp=Math.min(S.max,S.hp+2);guide('You descend. The air tastes older on floor '+S.floor+'.');if(S.floor%4===0)S.potions++;}else guide(pick(['The corridor narrows around XII.','Torchlight catches old writing, but it flakes away before you can read it.','A draft carries the smell of wet stone.','For a moment, XII hears footsteps matching every step.']));hear();render()}"""
+          new_move=old_move
+          if old_move not in s:
+              raise SystemExit('expected move function not found in restored version')
+          # Preserve full question-mark interactions from the rich version.
+          # Add randomized indirect Esperanto hearing clues.
+          start=s.index('function hear(){')
+          end=s.index('\nfunction move(dx,dy)',start)
+          hearing=r'''const hearClues={
+M:['Io gratas la ŝtonon ie proksime.','Vi aŭdas mallaŭtan spiradon inter la muroj.','Mallonga susuro haltas kiam vi haltas.','Io peza moviĝas ekster la lumo.','Vi aŭdas ungegojn aŭ piedojn sur ŝtono.','Mallaŭta grumblo venas tra la mallumo.','Io sekvas alian ritmon ol viaj paŝoj.','Subita movo rompas la silenton, poste nenio.','Vi aŭdas ion flari aŭ spiri proksime.','Fremda paŝo respondas al via propra.'],
+T:['Akvo gutas pli rapide en tiu direkto.','Vi aŭdas malfortan klakon de vitro aŭ metalo.','Io likva moviĝas en malgranda ujo.','Milda tintado venas tra la mallumo.','Vi aŭdas korkon aŭ kovrilon moviĝi.','Malgranda objekto ruliĝas kaj tuj haltas.','La aero portas odoron de herboj.','Vi aŭdas unu klaran guton, poste alian.','Io delikata vibras kiam vi moviĝas.','Mallaŭta sonoro venas de io malgranda kaj malmola.'],
+G:['Malproksima metala tintado atingas vin.','Io eta falas kun akra klaketo.','Pluraj malgrandaj pecoj tuŝas unu la alian.','Mallaŭta sonorado sekvas la eĥon.','Io malmola glitas sur ŝtono.','Vi aŭdas malgrandajn metalajn diskojn.','Rapida tintado venas kaj poste ĉesas.','Io malmola saltetas unufoje sur la planko.','Malforta metala susuro venas el la mallumo.','La eĥo portas sonon de multaj etaj metalaj pecoj.'],
+K:['Metalo frotas kontraŭ ŝtono.','Unu mallonga metala klako sonas proksime.','Io longa kaj maldika tintas kontraŭ la planko.','Metala objekto turniĝas kaj poste haltas.','Malgranda fera objekto skrapas ŝtonon.','Akra tintado venas el unu direkto.','Io metala balanciĝas tre mallaŭte.','Metalo tuŝas metalon unufoje.','Malgranda fera objekto falas kaj ne plu moviĝas.','Vi aŭdas unu precizan klakon de metalo.'],
+L:['Malvarma aero fluas el tiu direkto.','Vi aŭdas paperecan susuron sen vento.','Tre malforta flustro ripetas ion nekompreneblan.','La eĥo ĉi tie ŝajnas formi vortojn.','Io kiel paĝo turniĝas en la mallumo.','Seka kraketado memorigas pri malnova papero.','Mallaŭtaj voĉoj ŝajnas veni el la ŝtono mem.','La aero portas odoron de polvo kaj malnova inko.','Vi aŭdas unu vorton, sed ne klare.','Susuro de multaj maldikaj folioj venas de proksime.'],
+E:['La aero antaŭ vi sonas pli vasta kaj malplena.','Longa eĥo revenas el tiu direkto.','Vi sentas malvarman trablovon kaj profundan resonon.','Viaj paŝoj revenas al vi pli malfrue de tie.','La mallumo tie ŝajnas gluti la sonojn.','Vi aŭdas venton kie vento ne devus ekzisti.','Profunda malplena sono venas de preter la koridoro.','La eĥo sugestas pli grandan spacon proksime.','Malforta aerfluo portas sonojn de loko pli profunda.','Sono iras for de vi anstataŭ reveni.']};
+function hear(){let found=[];for(let y=Math.max(1,S.y-3);y<=Math.min(H-2,S.y+3);y++)for(let x=Math.max(1,S.x-3);x<=Math.min(W-2,S.x+3);x++){let t=S.g[y][x],d=Math.abs(x-S.x)+Math.abs(y-S.y);if(d>0&&d<=4&&hearClues[t])found.push({t,d})}if(!found.length){$('hear').textContent=pick(['Nur silento ĉirkaŭas vin.','Vi aŭdas nur viajn proprajn paŝojn.','Nenio krom malproksima gutado atingas viajn orelojn.','La mallumo restas strange silenta.']);return}found.sort((a,b)=>a.d-b.d);$('hear').textContent=pick(hearClues[found[0].t])}'''
+          s=s[:start]+hearing+s[end:]
+          # Add exactly-one-tile overworld keyboard movement; dodge mode keeps its own continuous controls.
+          marker='newRun();\n</script></body></html>'
+          keyboard=r'''let heldKeys=new Set();
+window.addEventListener('keydown',e=>{
+  if(!S||battle||$('modal').classList.contains('show'))return;
+  const k=e.key.toLowerCase();
+  const dirs={arrowup:[0,-1],w:[0,-1],arrowdown:[0,1],s:[0,1],arrowleft:[-1,0],a:[-1,0],arrowright:[1,0],d:[1,0]};
+  if(!dirs[k]||e.repeat||heldKeys.has(k))return;
+  e.preventDefault();heldKeys.add(k);move(...dirs[k]);
+});
+window.addEventListener('keyup',e=>heldKeys.delete(e.key.toLowerCase()));
+window.addEventListener('blur',()=>heldKeys.clear());
+newRun();
+</script></body></html>'''
+          if marker not in s: raise SystemExit('end marker not found')
+          s=s.replace(marker,keyboard,1)
+          p.write_text(s)
+          PY
+      - name: Commit repaired game
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add aventuro.html
+          git commit -m "Restore question-mark interactions and gameplay" || exit 0
+          git push
